@@ -1,0 +1,417 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { UNITS, URGENCY_LABEL, STATUS_LABEL, STATUS_COLOR } from '@/types'
+
+interface Category {
+  id: string
+  name: string
+  code: string
+  display_order: number
+}
+
+export default function RequestPage() {
+  const [categories, setCategories] = useState<Category[]>([])
+  const [form, setForm] = useState({
+    requester_name: '',
+    category: '',
+    category_code: '',
+    item_name: '',
+    spec: '',
+    quantity: 1,
+    unit: '개',
+    purchase_link: '',
+    purpose: '',
+    urgency: 'normal' as 'normal' | 'urgent' | 'relaxed',
+  })
+  const [photos, setPhotos] = useState<File[]>([])
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
+  const [autocompleteItems, setAutocompleteItems] = useState<string[]>([])
+  const [showAutocomplete, setShowAutocomplete] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitResult, setSubmitResult] = useState<{ receipt_number: string } | null>(null)
+  const [error, setError] = useState('')
+
+  // 현황 조회
+  const [queryNum, setQueryNum] = useState('')
+  const [queryResult, setQueryResult] = useState<any>(null)
+  const [queryError, setQueryError] = useState('')
+  const [querying, setQuerying] = useState(false)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const autocompleteTimer = useRef<NodeJS.Timeout | undefined>(undefined)
+
+  useEffect(() => {
+    fetch('/api/categories').then(r => r.json()).then(d => setCategories(d.data || []))
+  }, [])
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    const remaining = 3 - photos.length
+    const newFiles = files.slice(0, remaining)
+    setPhotos(prev => [...prev, ...newFiles])
+    const previews = newFiles.map(f => URL.createObjectURL(f))
+    setPhotoPreviews(prev => [...prev, ...previews])
+  }
+
+  const removePhoto = (idx: number) => {
+    setPhotos(prev => prev.filter((_, i) => i !== idx))
+    setPhotoPreviews(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const handleItemNameChange = (val: string) => {
+    setForm(prev => ({ ...prev, item_name: val }))
+    clearTimeout(autocompleteTimer.current)
+    if (val.length < 1) { setAutocompleteItems([]); setShowAutocomplete(false); return }
+    autocompleteTimer.current = setTimeout(async () => {
+      const res = await fetch(`/api/requests?autocomplete=${encodeURIComponent(val)}`)
+      const data = await res.json()
+      setAutocompleteItems(data.items || [])
+      setShowAutocomplete(true)
+    }, 250)
+  }
+
+  const uploadPhotos = async (): Promise<string[]> => {
+    const urls: string[] = []
+    for (const file of photos) {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('bucket', 'request-photos')
+      const res = await fetch('/api/upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.url) urls.push(data.url)
+    }
+    return urls
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (!form.requester_name || !form.category || !form.item_name || !form.purpose || !form.urgency) {
+      setError('필수 항목을 모두 입력해주세요.')
+      return
+    }
+    if (form.quantity < 1) {
+      setError('수량은 1 이상이어야 합니다.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const photoUrls = photos.length > 0 ? await uploadPhotos() : []
+      const res = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, request_photos: photoUrls }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '제출 실패')
+      setSubmitResult({ receipt_number: data.receipt_number })
+    } catch (err: any) {
+      setError(err.message || '오류가 발생했습니다.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleQuery = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setQueryError('')
+    setQueryResult(null)
+    if (!queryNum.trim()) { setQueryError('접수번호를 입력해주세요.'); return }
+    setQuerying(true)
+    try {
+      const res = await fetch(`/api/requests?receipt_number=${encodeURIComponent(queryNum.trim())}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '조회 실패')
+      setQueryResult(data.data)
+    } catch (err: any) {
+      setQueryError(err.message)
+    } finally {
+      setQuerying(false)
+    }
+  }
+
+  // 제출 완료 화면
+  if (submitResult) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-md p-8 max-w-md w-full text-center">
+          <div className="text-5xl mb-4">✅</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">요청이 접수되었습니다</h2>
+          <div className="bg-blue-50 rounded-xl p-4 mt-4 mb-6">
+            <p className="text-sm text-gray-500 mb-1">접수번호</p>
+            <p className="text-2xl font-bold text-blue-700 tracking-wider">{submitResult.receipt_number}</p>
+          </div>
+          <p className="text-gray-500 text-sm mb-6">이 번호로 처리 현황을 확인하세요</p>
+          <button
+            onClick={() => {
+              setSubmitResult(null)
+              setForm({ requester_name: '', category: '', category_code: '', item_name: '', spec: '', quantity: 1, unit: '개', purchase_link: '', purpose: '', urgency: 'normal' })
+              setPhotos([])
+              setPhotoPreviews([])
+            }}
+            className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold text-lg hover:bg-blue-700 transition"
+          >
+            새 요청 작성하기
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
+      <header className="bg-blue-700 text-white px-4 py-5 shadow">
+        <p className="text-xs opacity-80 mb-1">동양미래대학교 사무처 시설관리팀</p>
+        <h1 className="text-xl font-bold leading-snug">물품 요청서</h1>
+      </header>
+
+      <main className="max-w-xl mx-auto px-4 py-6 space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
+
+          {/* 이름 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">이름 <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={form.requester_name}
+              onChange={e => setForm(p => ({ ...p, requester_name: e.target.value }))}
+              placeholder="성함을 입력하세요"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* 카테고리 칩 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">물품 카테고리 <span className="text-red-500">*</span></label>
+            <div className="flex flex-wrap gap-2">
+              {categories.map(cat => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, category: cat.name, category_code: cat.code }))}
+                  className={`px-4 py-2 rounded-full text-sm font-medium border transition ${
+                    form.category === cat.name
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 물품명 + 자동완성 */}
+          <div className="relative">
+            <label className="block text-sm font-semibold text-gray-700 mb-1">물품명 <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={form.item_name}
+              onChange={e => handleItemNameChange(e.target.value)}
+              onBlur={() => setTimeout(() => setShowAutocomplete(false), 150)}
+              onFocus={() => autocompleteItems.length > 0 && setShowAutocomplete(true)}
+              placeholder="예: LED 형광등, 배수관 부품"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {showAutocomplete && autocompleteItems.length > 0 && (
+              <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-xl shadow-lg mt-1 overflow-hidden">
+                {autocompleteItems.map((item, i) => (
+                  <li
+                    key={i}
+                    onMouseDown={() => { setForm(p => ({ ...p, item_name: item })); setShowAutocomplete(false) }}
+                    className="px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer"
+                  >
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* 규격 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">규격 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
+            <input
+              type="text"
+              value={form.spec}
+              onChange={e => setForm(p => ({ ...p, spec: e.target.value }))}
+              placeholder="크기·용량·모델명 등 구입에 필요한 사양"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* 수량 + 단위 */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-semibold text-gray-700 mb-1">수량 <span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                min={1}
+                value={form.quantity}
+                onChange={e => setForm(p => ({ ...p, quantity: parseInt(e.target.value) || 1 }))}
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="w-32">
+              <label className="block text-sm font-semibold text-gray-700 mb-1">단위</label>
+              <select
+                value={form.unit}
+                onChange={e => setForm(p => ({ ...p, unit: e.target.value }))}
+                className="w-full border border-gray-300 rounded-xl px-3 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* 구입 참고 링크 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">구입 참고 링크 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
+            <input
+              type="url"
+              value={form.purchase_link}
+              onChange={e => setForm(p => ({ ...p, purchase_link: e.target.value }))}
+              placeholder="쿠팡·네이버쇼핑 등 참고할 상품 링크"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* 사진 첨부 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              사진 첨부 <span className="text-gray-400 font-normal text-xs">(선택 · 최대 3장)</span>
+            </label>
+            <p className="text-xs text-gray-500 mb-2">교체 대상·파손 부위 사진 (구입 규격 파악에 도움)</p>
+            <div className="flex gap-2 flex-wrap">
+              {photoPreviews.map((src, i) => (
+                <div key={i} className="relative w-24 h-24">
+                  <img src={src} alt="" className="w-24 h-24 object-cover rounded-xl border" />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(i)}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold"
+                  >×</button>
+                </div>
+              ))}
+              {photos.length < 3 && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:text-blue-500 transition text-sm"
+                >
+                  <span className="text-2xl">+</span>
+                  <span className="text-xs mt-1">사진 추가</span>
+                </button>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handlePhotoChange}
+            />
+          </div>
+
+          {/* 사용 용도 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">사용 용도 / 요청 사유 <span className="text-red-500">*</span></label>
+            <textarea
+              value={form.purpose}
+              onChange={e => setForm(p => ({ ...p, purpose: e.target.value }))}
+              rows={3}
+              placeholder="어디에, 왜 필요한지 간략히 적어주세요"
+              className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+          </div>
+
+          {/* 긴급도 */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">긴급도 <span className="text-red-500">*</span></label>
+            <div className="flex gap-2">
+              {(['normal', 'urgent', 'relaxed'] as const).map(u => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, urgency: u }))}
+                  className={`flex-1 py-3 rounded-xl font-medium text-sm border-2 transition ${
+                    form.urgency === u
+                      ? u === 'urgent'
+                        ? 'bg-red-600 text-white border-red-600'
+                        : u === 'relaxed'
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'bg-gray-600 text-white border-gray-600'
+                      : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  {u === 'urgent' ? '🔴 긴급' : u === 'relaxed' ? '🔵 여유' : '⚪ 일반'}
+                  {u === 'urgent' && <span className="block text-xs font-normal opacity-80">3일 내</span>}
+                  {u === 'relaxed' && <span className="block text-xs font-normal opacity-80">1주 이상</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {submitting ? '제출 중...' : '요청 제출하기'}
+          </button>
+        </form>
+
+        {/* 현황 조회 */}
+        <div className="border-t border-gray-200 pt-6">
+          <h2 className="text-base font-bold text-gray-700 mb-3">내 요청 현황 확인</h2>
+          <form onSubmit={handleQuery} className="flex gap-2">
+            <input
+              type="text"
+              value={queryNum}
+              onChange={e => setQueryNum(e.target.value)}
+              placeholder="예: 25-05-전기-003"
+              className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              disabled={querying}
+              className="px-5 py-3 bg-gray-700 text-white rounded-xl font-semibold hover:bg-gray-800 transition disabled:opacity-60"
+            >
+              {querying ? '...' : '조회'}
+            </button>
+          </form>
+
+          {queryError && (
+            <div className="mt-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{queryError}</div>
+          )}
+
+          {queryResult && (
+            <div className="mt-3 bg-white border border-gray-200 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-mono text-sm text-gray-500">{queryResult.receipt_number}</span>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold ${STATUS_COLOR[queryResult.status as keyof typeof STATUS_COLOR]}`}>
+                  {STATUS_LABEL[queryResult.status as keyof typeof STATUS_LABEL]}
+                </span>
+              </div>
+              <p className="text-base font-semibold text-gray-800">{queryResult.item_name}</p>
+              <p className="text-sm text-gray-500 mt-1">{queryResult.category}</p>
+              {queryResult.status === 'rejected' && queryResult.reject_reason && (
+                <div className="mt-2 bg-red-50 rounded-lg px-3 py-2 text-sm text-red-700">
+                  <span className="font-semibold">반려 사유:</span> {queryResult.reject_reason}
+                </div>
+              )}
+              <p className="text-xs text-gray-400 mt-2">접수일: {queryResult.created_at?.slice(0, 10)}</p>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  )
+}

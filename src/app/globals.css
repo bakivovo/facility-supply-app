@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+body {
+  font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', Arial, sans-serif;
+  color: #1a1a1a;
+}
