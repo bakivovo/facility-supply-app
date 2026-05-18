@@ -288,6 +288,33 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           <div className="col-span-2"><span className="text-gray-500">규격</span><br /><strong>{request.spec}</strong></div>
         )}
         <div className="col-span-2"><span className="text-gray-500">용도/사유</span><br /><strong>{request.purpose}</strong></div>
+
+        {/* 구입 금액 정보 — 구입완료·정산완료 상태에서만 표시 */}
+        {(request.status === 'purchased' || request.status === 'settled') && (
+          <div className="col-span-2">
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex gap-6 text-sm">
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">구입금액</p>
+                <p className="font-semibold text-gray-800">
+                  {request.amount != null ? request.amount.toLocaleString() + '원' : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">배송비</p>
+                <p className="font-semibold text-gray-800">
+                  {request.shipping_fee != null ? request.shipping_fee.toLocaleString() + '원' : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-0.5">합계</p>
+                <p className="font-bold text-blue-700">
+                  {((request.amount || 0) + (request.shipping_fee || 0)).toLocaleString()}원
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {request.purchase_link && (
           <div className="col-span-2">
             <a href={request.purchase_link} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs break-all">
