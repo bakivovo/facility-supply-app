@@ -12,7 +12,9 @@ interface Stats {
   new: number
   reviewing: number
   purchased: number
-  settled_amount: number
+  settled_purchase: number
+  settled_shipping: number
+  settled_total: number
 }
 
 export default function AdminPage() {
@@ -21,7 +23,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [requests, setRequests] = useState<Request[]>([])
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
-  const [stats, setStats] = useState<Stats>({ new: 0, reviewing: 0, purchased: 0, settled_amount: 0 })
+  const [stats, setStats] = useState<Stats>({ new: 0, reviewing: 0, purchased: 0, settled_purchase: 0, settled_shipping: 0, settled_total: 0 })
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -70,7 +72,7 @@ export default function AdminPage() {
     const [reqData, vendorData, statsData] = await Promise.all([reqRes.json(), vendorRes.json(), statsRes.json()])
     setRequests(reqData.data || [])
     setVendors(vendorData.data || [])
-    setStats(statsData.data || { new: 0, reviewing: 0, purchased: 0, settled_amount: 0 })
+    setStats(statsData.data || { new: 0, reviewing: 0, purchased: 0, settled_purchase: 0, settled_shipping: 0, settled_total: 0 })
     setLoading(false)
   }, [statusFilter])
 
@@ -226,16 +228,18 @@ export default function AdminPage() {
       {activeTab === 'dashboard' && (
         <div className="max-w-7xl mx-auto px-4 py-6">
           {/* 대시보드 카드 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
             {[
-              { label: '신규 요청', value: stats.new, color: 'bg-green-50 border-green-200 text-green-700', dot: 'bg-green-500' },
-              { label: '처리 중', value: stats.reviewing + stats.purchased, color: 'bg-orange-50 border-orange-200 text-orange-700', dot: 'bg-orange-500' },
-              { label: '구입 완료', value: stats.purchased, color: 'bg-blue-50 border-blue-200 text-blue-700', dot: 'bg-blue-500' },
-              { label: '이번 달 정산', value: stats.settled_amount.toLocaleString() + '원', color: 'bg-gray-50 border-gray-200 text-gray-700', dot: 'bg-gray-500' },
+              { label: '신규 요청', value: stats.new, color: 'bg-green-50 border-green-200 text-green-700' },
+              { label: '처리 중', value: stats.reviewing + stats.purchased, color: 'bg-orange-50 border-orange-200 text-orange-700' },
+              { label: '구입 완료', value: stats.purchased, color: 'bg-blue-50 border-blue-200 text-blue-700' },
+              { label: '이번 달 구매금액', value: stats.settled_purchase.toLocaleString() + '원', color: 'bg-purple-50 border-purple-200 text-purple-700' },
+              { label: '이번 달 배송비', value: stats.settled_shipping.toLocaleString() + '원', color: 'bg-pink-50 border-pink-200 text-pink-700' },
+              { label: '이번 달 합계', value: stats.settled_total.toLocaleString() + '원', color: 'bg-gray-50 border-gray-200 text-gray-700' },
             ].map((card, i) => (
               <div key={i} className={`bg-white border rounded-xl p-4 ${card.color}`}>
                 <p className="text-xs font-medium opacity-70 mb-1">{card.label}</p>
-                <p className="text-2xl font-bold">{card.value}</p>
+                <p className="text-xl font-bold">{card.value}</p>
               </div>
             ))}
           </div>
