@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import type { Request, ReceiptPhoto } from '@/types'
 import { STATUS_LABEL, STATUS_FLOW, NEXT_STATUS_LABEL } from '@/types'
+import { uploadToStorage, uploadManyToStorage } from '@/lib/uploadToStorage'
 
 interface Props {
   request: Request
@@ -164,21 +165,6 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
     multiple: true,
   })
 
-  // 파일 업로드 (공통)
-  const uploadFiles = async (files: File[], bucket: string): Promise<string[]> => {
-    const urls: string[] = []
-    for (const file of files) {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('bucket', bucket)
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const { ok, data } = await safeJson(res)
-      if (!ok) throw new Error(data.error || '업로드 실패')
-      if (data.url) urls.push(data.url)
-    }
-    return urls
-  }
-
   // 다음 단계로 변경
   const handleNextStatus = async () => {
     const nextStatus = STATUS_FLOW[request.status]
@@ -189,26 +175,18 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       let receiptUrls: ReceiptPhoto[] = (request.receipt_photo_urls as ReceiptPhoto[]) || []
 
       if (nextStatus === 'settled') {
-        // 새 납품 사진 업로드
+        // 납품 사진: 브라우저 → Supabase Storage 직접 업로드
         if (deliveryPhotos.length > 0) {
-          const newUrls = await uploadFiles(deliveryPhotos, 'delivery-photos')
-          deliveryUrls = [
-            ...(request.delivery_photo_urls || []),
-            ...newUrls,
-          ]
+          const newUrls = await uploadManyToStorage(deliveryPhotos, 'delivery-photos')
+          deliveryUrls = [...(request.delivery_photo_urls || []), ...newUrls]
         }
 
-        // 영수증 사진 업로드
+        // 영수증 사진: 파일이 있는 항목만 직접 업로드, 기존 URL은 그대로 유지
         const newReceiptUrls: ReceiptPhoto[] = []
         for (const rp of receiptPhotos) {
           if (rp.file) {
-            const fd = new FormData()
-            fd.append('file', rp.file)
-            fd.append('bucket', 'receipt-photos')
-            const res = await fetch('/api/upload', { method: 'POST', body: fd })
-            const { ok, data } = await safeJson(res)
-            if (!ok) throw new Error(data.error || '영수증 업로드 실패')
-            if (data.url) newReceiptUrls.push({ label: rp.label, url: data.url })
+            const url = await uploadToStorage(rp.file, 'receipt-photos')
+            newReceiptUrls.push({ label: rp.label, url })
           } else if (rp.url) {
             newReceiptUrls.push({ label: rp.label, url: rp.url })
           }

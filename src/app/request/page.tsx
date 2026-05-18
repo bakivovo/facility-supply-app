@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { UNITS, URGENCY_LABEL, STATUS_LABEL, STATUS_COLOR } from '@/types'
+import { uploadManyToStorage } from '@/lib/uploadToStorage'
 
 interface Category {
   id: string
@@ -72,16 +73,8 @@ export default function RequestPage() {
   }
 
   const uploadPhotos = async (): Promise<string[]> => {
-    const urls: string[] = []
-    for (const file of photos) {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('bucket', 'request-photos')
-      const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const data = await res.json()
-      if (data.url) urls.push(data.url)
-    }
-    return urls
+    // 브라우저 → Supabase Storage 직접 업로드 (Vercel 페이로드 한도 우회)
+    return uploadManyToStorage(photos, 'request-photos')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
