@@ -12,8 +12,121 @@ interface Props {
   onClose: () => void
 }
 
+// ─── 헬퍼: 응답이 JSON이 아닐 때도 안전하게 파싱 ───
+async function safeJson(res: Response): Promise<{ ok: boolean; data: any }> {
+  const text = await res.text()
+  try {
+    return { ok: res.ok, data: JSON.parse(text) }
+  } catch {
+    // HTML 오류 페이지 등 non-JSON 응답 처리
+    const snippet = text.slice(0, 120).replace(/<[^>]+>/g, '').trim()
+    return {
+      ok: false,
+      data: { error: `서버 오류 (${res.status})${snippet ? ': ' + snippet : ''}` },
+    }
+  }
+}
+
+// ─── 영수증 카드 1장당 드롭존 컴포넌트 (훅은 컴포넌트 안에서만 호출 가능) ───
+interface ReceiptCardProps {
+  index: number
+  label: string
+  url?: string
+  onLabelChange: (label: string) => void
+  onFileDrop: (file: File, previewUrl: string) => void
+  onRemove: () => void
+}
+
+function ReceiptDropzoneCard({ index, label, url, onLabelChange, onFileDrop, onRemove }: ReceiptCardProps) {
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    const file = acceptedFiles[0]
+    if (!file) return
+    onFileDrop(file, URL.createObjectURL(file))
+  }, [onFileDrop])
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'image/*': [] },
+    multiple: false,
+    noClick: !!url, // 사진이 있을 때는 클릭으로 재선택 방지 (썸네일 클릭용 별도 버튼 제공)
+  })
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-2">
+      {/* 상단: 번호 + 종류명 + 삭제 */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400 font-medium w-5 shrink-0">{index + 1}</span>
+        <input
+          type="text"
+          value={label}
+          onChange={e => onLabelChange(e.target.value)}
+          className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-gray-300 hover:text-red-400 text-base leading-none"
+          title="삭제"
+        >
+          ×
+        </button>
+      </div>
+
+      {/* 드롭존 영역 */}
+      <div
+        {...getRootProps()}
+        className={`relative rounded-lg border-2 border-dashed transition cursor-pointer ${
+          isDragActive
+            ? 'border-blue-500 bg-blue-50'
+            : url
+            ? 'border-gray-200 bg-gray-50'
+            : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+        }`}
+        style={{ minHeight: '96px' }}
+      >
+        <input {...getInputProps()} />
+
+        {url ? (
+          /* 사진 미리보기 */
+          <div className="flex items-center gap-3 p-2">
+            <a href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
+              <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border" />
+            </a>
+            <div className="flex flex-col gap-1">
+              <p className="text-xs text-gray-500">사진이 선택되었습니다.</p>
+              {/* 재선택 버튼 — 별도 label로 파일 인풋 트리거 */}
+              <label className="cursor-pointer text-xs text-blue-600 hover:underline">
+                다시 선택
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    onFileDrop(file, URL.createObjectURL(file))
+                  }}
+                />
+              </label>
+              <p className="text-xs text-gray-400">또는 사진을 드래그</p>
+            </div>
+          </div>
+        ) : (
+          /* 빈 슬롯 */
+          <div className="flex flex-col items-center justify-center h-full py-4 gap-1">
+            <span className="text-2xl text-gray-300">📄</span>
+            <p className="text-xs text-gray-400">
+              {isDragActive ? '여기에 놓으세요' : '클릭하거나 사진을 드래그'}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── 메인 패널 ───
 export default function RequestDetailPanel({ request, vendors, onUpdate, onClose }: Props) {
-  const [vendor, setVendor] = useState(request.vendor || '')
   const [vendorInput, setVendorInput] = useState(request.vendor || '')
   const [amount, setAmount] = useState(request.amount?.toString() || '')
   const [purchaseDate, setPurchaseDate] = useState(request.purchase_date || '')
@@ -22,11 +135,15 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
   const [showReject, setShowReject] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // 정산 처리용 사진
+  // 납품완료 사진
   const [deliveryPhotos, setDeliveryPhotos] = useState<File[]>([])
-  const [deliveryPreviews, setDeliveryPreviews] = useState<string[]>(request.delivery_photo_urls || [])
+  const [deliveryPreviews, setDeliveryPreviews] = useState<string[]>(
+    request.delivery_photo_urls || []
+  )
+
+  // 영수증 사진
   const [receiptPhotos, setReceiptPhotos] = useState<Array<{ label: string; file?: File; url?: string }>>(
-    request.receipt_photo_urls
+    request.receipt_photo_urls && (request.receipt_photo_urls as ReceiptPhoto[]).length > 0
       ? (request.receipt_photo_urls as ReceiptPhoto[]).map(r => ({ label: r.label, url: r.url }))
       : [{ label: '물건 영수증' }, { label: '배송료 영수증' }]
   )
@@ -35,11 +152,10 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
 
   const isSettling = request.status === 'purchased'
 
-  // 납품 사진 드랍존
+  // 납품 사진 드롭존
   const onDropDelivery = useCallback((acceptedFiles: File[]) => {
     setDeliveryPhotos(prev => [...prev, ...acceptedFiles])
-    const previews = acceptedFiles.map(f => URL.createObjectURL(f))
-    setDeliveryPreviews(prev => [...prev, ...previews])
+    setDeliveryPreviews(prev => [...prev, ...acceptedFiles.map(f => URL.createObjectURL(f))])
   }, [])
 
   const { getRootProps: getDeliveryRootProps, getInputProps: getDeliveryInputProps, isDragActive: isDeliveryDrag } = useDropzone({
@@ -48,6 +164,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
     multiple: true,
   })
 
+  // 파일 업로드 (공통)
   const uploadFiles = async (files: File[], bucket: string): Promise<string[]> => {
     const urls: string[] = []
     for (const file of files) {
@@ -55,41 +172,48 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       fd.append('file', file)
       fd.append('bucket', bucket)
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
-      const data = await res.json()
+      const { ok, data } = await safeJson(res)
+      if (!ok) throw new Error(data.error || '업로드 실패')
       if (data.url) urls.push(data.url)
     }
     return urls
   }
 
+  // 다음 단계로 변경
   const handleNextStatus = async () => {
     const nextStatus = STATUS_FLOW[request.status]
     if (!nextStatus) return
     setLoading(true)
     try {
       let deliveryUrls = request.delivery_photo_urls || []
-      let receiptUrls = request.receipt_photo_urls || []
+      let receiptUrls: ReceiptPhoto[] = (request.receipt_photo_urls as ReceiptPhoto[]) || []
 
       if (nextStatus === 'settled') {
         // 새 납품 사진 업로드
         if (deliveryPhotos.length > 0) {
           const newUrls = await uploadFiles(deliveryPhotos, 'delivery-photos')
-          deliveryUrls = [...(request.delivery_photo_urls?.filter(u => !u.startsWith('blob:')) || []), ...newUrls]
+          deliveryUrls = [
+            ...(request.delivery_photo_urls || []),
+            ...newUrls,
+          ]
         }
+
         // 영수증 사진 업로드
         const newReceiptUrls: ReceiptPhoto[] = []
-        for (const r of receiptPhotos) {
-          if (r.url && !r.file) {
-            newReceiptUrls.push({ label: r.label, url: r.url })
-          } else if (r.file) {
+        for (const rp of receiptPhotos) {
+          if (rp.file) {
             const fd = new FormData()
-            fd.append('file', r.file)
+            fd.append('file', rp.file)
             fd.append('bucket', 'receipt-photos')
             const res = await fetch('/api/upload', { method: 'POST', body: fd })
-            const data = await res.json()
-            if (data.url) newReceiptUrls.push({ label: r.label, url: data.url })
+            const { ok, data } = await safeJson(res)
+            if (!ok) throw new Error(data.error || '영수증 업로드 실패')
+            if (data.url) newReceiptUrls.push({ label: rp.label, url: data.url })
+          } else if (rp.url) {
+            newReceiptUrls.push({ label: rp.label, url: rp.url })
           }
         }
-        receiptUrls = newReceiptUrls as any
+        receiptUrls = newReceiptUrls
       }
 
       const res = await fetch('/api/admin/requests', {
@@ -102,12 +226,14 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           amount: amount ? parseInt(amount) : null,
           purchase_date: purchaseDate || null,
           memo: memo || null,
-          delivery_photo_urls: nextStatus === 'settled' ? deliveryUrls : undefined,
-          receipt_photo_urls: nextStatus === 'settled' ? receiptUrls : undefined,
+          ...(nextStatus === 'settled' && {
+            delivery_photo_urls: deliveryUrls,
+            receipt_photo_urls: receiptUrls,
+          }),
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
+      const { ok, data } = await safeJson(res)
+      if (!ok) throw new Error(data.error || '상태 변경 실패')
       onUpdate(data.data[0])
     } catch (err: any) {
       alert('오류: ' + err.message)
@@ -116,6 +242,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
     }
   }
 
+  // 반려 처리
   const handleReject = async () => {
     if (!rejectReason.trim()) { alert('반려 사유를 입력해주세요.'); return }
     setLoading(true)
@@ -125,8 +252,8 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: [request.id], status: 'rejected', reject_reason: rejectReason }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
+      const { ok, data } = await safeJson(res)
+      if (!ok) throw new Error(data.error || '반려 처리 실패')
       onUpdate(data.data[0])
     } catch (err: any) {
       alert('오류: ' + err.message)
@@ -135,22 +262,25 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
     }
   }
 
+  // 엑셀 다운로드
   const handleExcel = async (type: 'delivery' | 'receipt') => {
     setExcelLoading(type)
     try {
-      const body = {
-        receipt_number: request.receipt_number,
-        item_name: request.item_name,
-        delivery_photo_urls: type === 'delivery' ? (request.delivery_photo_urls || []) : undefined,
-        receipt_photo_urls: type === 'receipt' ? (request.receipt_photo_urls || []) : undefined,
-      }
       const endpoint = type === 'delivery' ? '/api/excel/delivery' : '/api/excel/receipt'
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          receipt_number: request.receipt_number,
+          item_name: request.item_name,
+          delivery_photo_urls: type === 'delivery' ? (request.delivery_photo_urls || []) : undefined,
+          receipt_photo_urls: type === 'receipt' ? (request.receipt_photo_urls || []) : undefined,
+        }),
       })
-      if (!res.ok) throw new Error('엑셀 생성 실패')
+      if (!res.ok) {
+        const { data } = await safeJson(res)
+        throw new Error(data.error || '엑셀 생성 실패')
+      }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -167,13 +297,16 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
 
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mt-1 mx-2 mb-2">
+
       {/* 기본 정보 요약 */}
       <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
         <div><span className="text-gray-500">요청자</span><br /><strong>{request.requester_name}</strong></div>
-        <div><span className="text-gray-500">접수일</span><br /><strong>{request.created_at.slice(0,10)}</strong></div>
+        <div><span className="text-gray-500">접수일</span><br /><strong>{request.created_at.slice(0, 10)}</strong></div>
         <div><span className="text-gray-500">물품명</span><br /><strong>{request.item_name}</strong></div>
         <div><span className="text-gray-500">수량</span><br /><strong>{request.quantity} {request.unit}</strong></div>
-        {request.spec && <div className="col-span-2"><span className="text-gray-500">규격</span><br /><strong>{request.spec}</strong></div>}
+        {request.spec && (
+          <div className="col-span-2"><span className="text-gray-500">규격</span><br /><strong>{request.spec}</strong></div>
+        )}
         <div className="col-span-2"><span className="text-gray-500">용도/사유</span><br /><strong>{request.purpose}</strong></div>
         {request.purchase_link && (
           <div className="col-span-2">
@@ -196,13 +329,16 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         )}
       </div>
 
-      {/* 상태 흐름 표시 */}
+      {/* 상태 흐름 */}
       <div className="flex items-center gap-1 mb-4 overflow-x-auto">
         {(['new', 'reviewing', 'purchased', 'settled'] as const).map((s, i) => (
           <div key={s} className="flex items-center gap-1 flex-shrink-0">
             <span className={`px-2 py-1 rounded text-xs font-semibold ${
-              request.status === s ? 'bg-blue-600 text-white' :
-              (['new', 'reviewing', 'purchased', 'settled'].indexOf(request.status) > i ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400')
+              request.status === s
+                ? 'bg-blue-600 text-white'
+                : ['new', 'reviewing', 'purchased', 'settled'].indexOf(request.status) > i
+                ? 'bg-green-100 text-green-700'
+                : 'bg-gray-100 text-gray-400'
             }`}>{STATUS_LABEL[s]}</span>
             {i < 3 && <span className="text-gray-300">→</span>}
           </div>
@@ -259,8 +395,9 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
 
           {/* 정산완료 처리 시 사진 업로드 */}
           {isSettling && (
-            <div className="space-y-4 pt-2 border-t border-gray-200">
-              {/* 납품완료 사진 */}
+            <div className="space-y-4 pt-3 border-t border-gray-200">
+
+              {/* ① 납품완료 사진 */}
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">① 납품완료 사진</p>
                 <div
@@ -270,66 +407,66 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
                   }`}
                 >
                   <input {...getDeliveryInputProps()} />
-                  <p className="text-sm text-gray-500">여기에 사진을 드래그하거나 클릭하여 업로드</p>
+                  <p className="text-sm text-gray-500">
+                    {isDeliveryDrag ? '여기에 놓으세요' : '클릭하거나 사진을 드래그하여 업로드'}
+                  </p>
                 </div>
-                {/* 슬롯 표시 */}
-                <div className="grid grid-cols-6 gap-1 mt-2">
-                  {Array.from({ length: Math.max(6, deliveryPreviews.length) }).map((_, i) => (
-                    <div key={i} className={`aspect-square rounded border ${deliveryPreviews[i] ? '' : 'border-dashed border-gray-200'}`}>
-                      {deliveryPreviews[i] ? (
-                        <img src={deliveryPreviews[i]} alt="" className="w-full h-full object-cover rounded" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-200 text-xs">✕</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                {/* 슬롯 그리드 */}
+                {deliveryPreviews.length > 0 && (
+                  <div className="grid grid-cols-6 gap-1 mt-2">
+                    {Array.from({ length: Math.max(6, deliveryPreviews.length) }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`aspect-square rounded border overflow-hidden ${
+                          deliveryPreviews[i] ? '' : 'border-dashed border-gray-200'
+                        }`}
+                      >
+                        {deliveryPreviews[i] ? (
+                          <img src={deliveryPreviews[i]} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-200 text-xs">—</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* 영수증 사진 */}
+              {/* ② 영수증 사진 */}
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">② 영수증 사진</p>
                 <div className="space-y-2">
                   {receiptPhotos.map((rp, i) => (
-                    <div key={i} className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl p-3">
-                      <span className="text-xs text-gray-400 w-5">{i + 1}</span>
-                      <input
-                        type="text"
-                        value={rp.label}
-                        onChange={e => {
-                          const updated = [...receiptPhotos]
-                          updated[i] = { ...updated[i], label: e.target.value }
-                          setReceiptPhotos(updated)
-                        }}
-                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs w-32"
-                      />
-                      {rp.url ? (
-                        <a href={rp.url} target="_blank" rel="noreferrer">
-                          <img src={rp.url} alt="" className="w-12 h-12 object-cover rounded border" />
-                        </a>
-                      ) : (
-                        <label className="cursor-pointer text-xs text-blue-600 underline">
-                          사진 선택
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={e => {
-                              const file = e.target.files?.[0]
-                              if (!file) return
-                              const updated = [...receiptPhotos]
-                              updated[i] = { ...updated[i], file, url: URL.createObjectURL(file) }
-                              setReceiptPhotos(updated)
-                            }}
-                          />
-                        </label>
-                      )}
-                    </div>
+                    <ReceiptDropzoneCard
+                      key={i}
+                      index={i}
+                      label={rp.label}
+                      url={rp.url}
+                      onLabelChange={label => {
+                        setReceiptPhotos(prev => {
+                          const updated = [...prev]
+                          updated[i] = { ...updated[i], label }
+                          return updated
+                        })
+                      }}
+                      onFileDrop={(file, previewUrl) => {
+                        setReceiptPhotos(prev => {
+                          const updated = [...prev]
+                          updated[i] = { ...updated[i], file, url: previewUrl }
+                          return updated
+                        })
+                      }}
+                      onRemove={() => {
+                        setReceiptPhotos(prev => prev.filter((_, idx) => idx !== i))
+                      }}
+                    />
                   ))}
                   <button
                     type="button"
-                    onClick={() => setReceiptPhotos(prev => [...prev, { label: `영수증 ${prev.length + 1}` }])}
-                    className="text-xs text-blue-600 hover:underline"
+                    onClick={() =>
+                      setReceiptPhotos(prev => [...prev, { label: `영수증 ${prev.length + 1}` }])
+                    }
+                    className="text-xs text-blue-600 hover:underline mt-1"
                   >
                     + 영수증 추가
                   </button>
@@ -340,9 +477,9 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         </div>
       )}
 
-      {/* 이미 정산완료인 경우 엑셀 다운로드 */}
+      {/* 정산완료 상태 — 엑셀 다운로드 */}
       {request.status === 'settled' && (
-        <div className="flex gap-2 mb-4">
+        <div className="flex gap-2 mb-4 flex-wrap">
           {request.delivery_photo_urls && request.delivery_photo_urls.length > 0 && (
             <button
               onClick={() => handleExcel('delivery')}
@@ -376,6 +513,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               {loading ? '처리 중...' : NEXT_STATUS_LABEL[request.status]}
             </button>
           )}
+
           {!showReject ? (
             <button
               onClick={() => setShowReject(true)}
@@ -409,6 +547,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               </div>
             </div>
           )}
+
           <button
             onClick={onClose}
             className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition"
@@ -421,7 +560,9 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       {request.status === 'rejected' && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
           <p className="text-sm font-semibold text-red-700">반려 처리됨</p>
-          {request.reject_reason && <p className="text-sm text-red-600 mt-1">사유: {request.reject_reason}</p>}
+          {request.reject_reason && (
+            <p className="text-sm text-red-600 mt-1">사유: {request.reject_reason}</p>
+          )}
         </div>
       )}
     </div>
