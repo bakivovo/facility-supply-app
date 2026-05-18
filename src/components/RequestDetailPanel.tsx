@@ -130,6 +130,7 @@ function ReceiptDropzoneCard({ index, label, url, onLabelChange, onFileDrop, onR
 export default function RequestDetailPanel({ request, vendors, onUpdate, onClose }: Props) {
   const [vendorInput, setVendorInput] = useState(request.vendor || '')
   const [amount, setAmount] = useState(request.amount?.toString() || '')
+  const [shippingFee, setShippingFee] = useState(request.shipping_fee?.toString() || '')
   const [purchaseDate, setPurchaseDate] = useState(request.purchase_date || '')
   const [memo, setMemo] = useState(request.memo || '')
   const [rejectReason, setRejectReason] = useState('')
@@ -202,6 +203,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           status: nextStatus,
           vendor: vendorInput || null,
           amount: amount ? parseInt(amount) : null,
+          shipping_fee: shippingFee ? parseInt(shippingFee) : null,
           purchase_date: purchaseDate || null,
           memo: memo || null,
           ...(nextStatus === 'settled' && {
@@ -350,6 +352,34 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            <div>
+              <label className="text-xs text-gray-600 font-medium mb-1 block">
+                배송비 (원) <span className="text-gray-400 font-normal">선택</span>
+              </label>
+              <input
+                type="number"
+                value={shippingFee}
+                onChange={e => setShippingFee(e.target.value)}
+                placeholder="0"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {/* 합계 표시 */}
+            {(amount || shippingFee) && (
+              <div className="col-span-2 flex justify-end">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm">
+                  <span className="text-gray-500">합계: </span>
+                  <span className="font-bold text-blue-700">
+                    {((parseInt(amount || '0') || 0) + (parseInt(shippingFee || '0') || 0)).toLocaleString()}원
+                  </span>
+                  {amount && shippingFee && (
+                    <span className="text-gray-400 text-xs ml-2">
+                      (구입 {parseInt(amount).toLocaleString()} + 배송 {parseInt(shippingFee).toLocaleString()})
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-xs text-gray-600 font-medium mb-1 block">구입 날짜</label>
               <input

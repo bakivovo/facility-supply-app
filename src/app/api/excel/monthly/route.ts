@@ -55,12 +55,14 @@ export async function GET(request: NextRequest) {
       { key: 'vendor', width: 14 },
       { key: 'purchase_date', width: 14 },
       { key: 'amount', width: 12 },
+      { key: 'shipping_fee', width: 12 },
+      { key: 'total', width: 12 },
       { key: 'memo', width: 20 },
       { key: 'status', width: 10 },
       { key: 'purpose', width: 24 },
     ]
 
-    ws1.mergeCells('A1:M1')
+    ws1.mergeCells('A1:O1')
     const t1 = ws1.getCell('A1')
     t1.value = `${year}년 ${parseInt(mon)}월 건축물관리용품 구매 정산 현황 — 동양미래대학교 사무처 시설관리팀`
     t1.font = { bold: true, size: 14 }
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
     ws1.getCell('A2').value = `정산기간: ${periodStr}`
     ws1.mergeCells('F2:I2')
     ws1.getCell('F2').value = `담당자: ${adminName}`
-    ws1.mergeCells('J2:M2')
+    ws1.mergeCells('J2:O2')
     ws1.getCell('J2').value = `출력일: ${dateStr}`
     ws1.getRow(2).eachCell(cell => {
       cell.font = { size: 10 }
@@ -79,7 +81,7 @@ export async function GET(request: NextRequest) {
     })
     ws1.getRow(2).height = 18
 
-    const headers = ['접수번호', '접수일', '카테고리', '물품명', '규격', '수량', '단위', '구입처', '구입일', '금액(원)', '메모', '상태', '요청사유']
+    const headers = ['접수번호', '접수일', '카테고리', '물품명', '규격', '수량', '단위', '구입처', '구입일', '금액(원)', '배송비(원)', '합계(원)', '메모', '상태', '요청사유']
     ws1.addRow(headers)
     const headerRow = ws1.getRow(3)
     headerRow.eachCell(cell => {
@@ -106,6 +108,8 @@ export async function GET(request: NextRequest) {
         r.vendor || '',
         r.purchase_date || '',
         r.amount || '',
+        r.shipping_fee || '',
+        (r.amount || 0) + (r.shipping_fee || 0) || '',
         r.memo || '',
         statusLabel[r.status] || r.status,
         r.purpose || '',
@@ -117,10 +121,21 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const sumRow = ws1.addRow(['합계', '', '', '', '', '', '', '', '', { formula: `SUM(J${dataStartRow}:J${dataStartRow + rows.length - 1})` }, '', '', ''])
+    const lastDataRow = dataStartRow + rows.length - 1
+    const sumRow = ws1.addRow([
+      '합계', '', '', '', '', '', '', '', '',
+      { formula: `SUM(J${dataStartRow}:J${lastDataRow})` }, // 금액
+      { formula: `SUM(K${dataStartRow}:K${lastDataRow})` }, // 배송비
+      { formula: `SUM(L${dataStartRow}:L${lastDataRow})` }, // 합계
+      '', '', '',
+    ])
     sumRow.getCell(1).font = { bold: true }
     sumRow.getCell(10).font = { bold: true }
     sumRow.getCell(10).numFmt = '#,##0'
+    sumRow.getCell(11).font = { bold: true }
+    sumRow.getCell(11).numFmt = '#,##0'
+    sumRow.getCell(12).font = { bold: true }
+    sumRow.getCell(12).numFmt = '#,##0'
     sumRow.eachCell(cell => {
       cell.border = { top: { style: 'medium' }, bottom: { style: 'medium' }, left: { style: 'thin' }, right: { style: 'thin' } }
     })

@@ -18,6 +18,7 @@ export interface Request {
   reject_reason: string | null
   vendor: string | null
   amount: number | null
+  shipping_fee: number | null
   purchase_date: string | null
   memo: string | null
   delivery_photo_urls: string[] | null
