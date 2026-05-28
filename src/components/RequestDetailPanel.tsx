@@ -129,8 +129,13 @@ function ReceiptDropzoneCard({ index, label, url, onLabelChange, onFileDrop, onR
 // ─── 메인 패널 ───
 export default function RequestDetailPanel({ request, vendors, onUpdate, onClose }: Props) {
   const [vendorInput, setVendorInput] = useState(request.vendor || '')
-  const [amount, setAmount] = useState(request.amount?.toString() || '')
+  const [unitPrice, setUnitPrice] = useState(request.unit_price?.toString() || '')
+  const [purchaseQty, setPurchaseQty] = useState(request.quantity?.toString() || '1')
   const [shippingFee, setShippingFee] = useState(request.shipping_fee?.toString() || '')
+
+  // 단가 × 수량 = 구입금액 자동 계산
+  const calcAmount = (parseInt(unitPrice || '0') || 0) * (parseInt(purchaseQty || '0') || 0)
+  const amount = calcAmount > 0 ? calcAmount.toString() : (request.amount?.toString() || '')
   const [purchaseDate, setPurchaseDate] = useState(request.purchase_date || '')
   const [memo, setMemo] = useState(request.memo || '')
   const [rejectReason, setRejectReason] = useState('')
@@ -202,7 +207,8 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           ids: [request.id],
           status: nextStatus,
           vendor: vendorInput || null,
-          amount: amount ? parseInt(amount) : null,
+          unit_price: unitPrice ? parseInt(unitPrice) : null,
+          amount: calcAmount > 0 ? calcAmount : (amount ? parseInt(amount) : null),
           shipping_fee: shippingFee ? parseInt(shippingFee) : null,
           purchase_date: purchaseDate || null,
           memo: memo || null,
@@ -370,15 +376,38 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               </datalist>
             </div>
             <div>
-              <label className="text-xs text-gray-600 font-medium mb-1 block">구입 금액 (원)</label>
+              <label className="text-xs text-gray-600 font-medium mb-1 block">단가 (원)</label>
               <input
                 type="number"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
+                value={unitPrice}
+                onChange={e => setUnitPrice(e.target.value)}
                 placeholder="0"
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            <div>
+              <label className="text-xs text-gray-600 font-medium mb-1 block">수량</label>
+              <input
+                type="number"
+                value={purchaseQty}
+                onChange={e => setPurchaseQty(e.target.value)}
+                min="1"
+                placeholder="1"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            {/* 구입금액 자동 계산 표시 */}
+            {calcAmount > 0 && (
+              <div className="col-span-2">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm flex items-center gap-2">
+                  <span className="text-gray-500">구입금액:</span>
+                  <span className="font-semibold text-gray-800">{calcAmount.toLocaleString()}원</span>
+                  <span className="text-gray-400 text-xs">
+                    ({parseInt(unitPrice || '0').toLocaleString()} × {parseInt(purchaseQty || '0')})
+                  </span>
+                </div>
+              </div>
+            )}
             <div>
               <label className="text-xs text-gray-600 font-medium mb-1 block">
                 배송비 (원) <span className="text-gray-400 font-normal">선택</span>
@@ -392,16 +421,16 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               />
             </div>
             {/* 합계 표시 */}
-            {(amount || shippingFee) && (
+            {(calcAmount > 0 || shippingFee) && (
               <div className="col-span-2 flex justify-end">
                 <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm">
                   <span className="text-gray-500">합계: </span>
                   <span className="font-bold text-blue-700">
-                    {((parseInt(amount || '0') || 0) + (parseInt(shippingFee || '0') || 0)).toLocaleString()}원
+                    {(calcAmount + (parseInt(shippingFee || '0') || 0)).toLocaleString()}원
                   </span>
-                  {amount && shippingFee && (
+                  {calcAmount > 0 && shippingFee && (
                     <span className="text-gray-400 text-xs ml-2">
-                      (구입 {parseInt(amount).toLocaleString()} + 배송 {parseInt(shippingFee).toLocaleString()})
+                      (구입 {calcAmount.toLocaleString()} + 배송 {parseInt(shippingFee).toLocaleString()})
                     </span>
                   )}
                 </div>

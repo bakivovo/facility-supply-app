@@ -17,6 +17,7 @@ export interface Request {
   status: Status
   reject_reason: string | null
   vendor: string | null
+  unit_price: number | null
   amount: number | null
   shipping_fee: number | null
   purchase_date: string | null

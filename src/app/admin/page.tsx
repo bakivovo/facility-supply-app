@@ -298,6 +298,10 @@ export default function AdminPage() {
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold">접수번호</th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden md:table-cell">카테고리</th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold">물품명</th>
+                    <th className="px-3 py-3 text-right text-gray-600 font-semibold hidden xl:table-cell">단가</th>
+                    <th className="px-3 py-3 text-right text-gray-600 font-semibold hidden xl:table-cell">수량</th>
+                    <th className="px-3 py-3 text-right text-gray-600 font-semibold hidden lg:table-cell">구입금액</th>
+                    <th className="px-3 py-3 text-right text-gray-600 font-semibold hidden lg:table-cell">배송료</th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden sm:table-cell">요청자</th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden lg:table-cell">긴급도</th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold">상태</th>
@@ -338,6 +342,18 @@ export default function AdminPage() {
                           <span className="font-medium">{req.item_name}</span>
                           {req.spec && <span className="text-gray-400 text-xs ml-1">({req.spec})</span>}
                         </td>
+                        <td className="px-3 py-3 text-right hidden xl:table-cell text-gray-700 text-xs tabular-nums">
+                          {req.unit_price != null ? req.unit_price.toLocaleString() : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right hidden xl:table-cell text-gray-700 text-xs tabular-nums">
+                          {req.quantity}
+                        </td>
+                        <td className="px-3 py-3 text-right hidden lg:table-cell text-gray-700 text-xs tabular-nums">
+                          {req.amount != null ? req.amount.toLocaleString() : '-'}
+                        </td>
+                        <td className="px-3 py-3 text-right hidden lg:table-cell text-gray-700 text-xs tabular-nums">
+                          {req.shipping_fee != null ? req.shipping_fee.toLocaleString() : '-'}
+                        </td>
                         <td className="px-3 py-3 hidden sm:table-cell text-gray-600">{req.requester_name}</td>
                         <td className="px-3 py-3 hidden lg:table-cell">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${URGENCY_COLOR[req.urgency]}`}>
@@ -352,7 +368,7 @@ export default function AdminPage() {
                       </tr>
                       {expandedId === req.id && (
                         <tr key={`${req.id}-detail`}>
-                          <td colSpan={7} className="p-0">
+                          <td colSpan={11} className="p-0">
                             <RequestDetailPanel
                               request={req}
                               vendors={vendors}
