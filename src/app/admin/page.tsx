@@ -28,6 +28,7 @@ export default function AdminPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkExcelLoading, setBulkExcelLoading] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // 월별 정산
@@ -103,6 +104,35 @@ export default function AdminPage() {
     setSelectedIds([])
     await fetchAll()
     setBulkLoading(false)
+  }
+
+  const handleBulkExcel = async () => {
+    if (selectedIds.length === 0) return
+    setBulkExcelLoading(true)
+    try {
+      const res = await fetch('/api/excel/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || '엑셀 생성 실패')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const now = new Date()
+      const yyMM = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}`
+      a.download = `${yyMM}_${selectedIds.length}건_정산내역.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: any) {
+      alert('오류: ' + err.message)
+    } finally {
+      setBulkExcelLoading(false)
+    }
   }
 
   const handleRequestUpdate = (updated: Request) => {
@@ -274,6 +304,13 @@ export default function AdminPage() {
                   {STATUS_LABEL[s]}으로 변경
                 </button>
               ))}
+              <button
+                onClick={handleBulkExcel}
+                disabled={bulkExcelLoading}
+                className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-60 ml-auto"
+              >
+                {bulkExcelLoading ? '생성 중...' : `📥 선택 항목 엑셀 다운로드`}
+              </button>
             </div>
           )}
 
