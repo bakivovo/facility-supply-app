@@ -50,15 +50,16 @@ export async function buildSettlementWorkbook(
   ws1.columns = [
     { key: 'receipt_number', width: 20 },  // A
     { key: 'item_name',      width: 24 },  // B
-    { key: 'vendor',         width: 14 },  // C
-    { key: 'purchase_date',  width: 12 },  // D
-    { key: 'amount',         width: 14 },  // E
-    { key: 'shipping_fee',   width: 14 },  // F
-    { key: 'total',          width: 14 },  // G
+    { key: 'spec',           width: 14 },  // C
+    { key: 'vendor',         width: 14 },  // D
+    { key: 'purchase_date',  width: 12 },  // E
+    { key: 'amount',         width: 14 },  // F
+    { key: 'shipping_fee',   width: 14 },  // G
+    { key: 'total',          width: 14 },  // H
   ]
 
   // 행1: 제목
-  ws1.mergeCells('A1:G1')
+  ws1.mergeCells('A1:H1')
   const titleCell = ws1.getCell('A1')
   titleCell.value     = title
   titleCell.font      = { bold: true, size: 13 }
@@ -66,7 +67,7 @@ export async function buildSettlementWorkbook(
   ws1.getRow(1).height = 32
 
   // 행2: 열 헤더
-  ws1.addRow(['접수번호', '물품명', '구입처', '구입일', '구입금액(원)', '배송비(원)', '합계(원)'])
+  ws1.addRow(['접수번호', '물품명', '규격', '구입처', '구입일', '구입금액(원)', '배송비(원)', '합계(원)'])
   ws1.getRow(2).eachCell(applyHeaderStyle)
 
   // 행3~: 데이터
@@ -77,6 +78,7 @@ export async function buildSettlementWorkbook(
     const row = ws1.addRow([
       r.receipt_number || '',
       r.item_name      || '',
+      r.spec           || '',
       r.vendor         || '',
       r.purchase_date  || '',
       amt || '',
@@ -86,8 +88,8 @@ export async function buildSettlementWorkbook(
     row.eachCell((cell, col) => {
       cell.font   = { size: 10 }
       cell.border = { top: { style: 'hair' }, bottom: { style: 'hair' }, left: { style: 'hair' }, right: { style: 'hair' } }
-      if (col >= 5) {
-        cell.numFmt   = '#,##0'
+      if (col >= 6) {
+        cell.numFmt    = '#,##0'
         cell.alignment = { horizontal: 'right', vertical: 'middle' }
       } else {
         cell.alignment = { vertical: 'middle' }
@@ -98,13 +100,13 @@ export async function buildSettlementWorkbook(
   // 합계행
   const lastData = DATA_START + items.length - 1
   const sumRow = ws1.addRow([
-    '합계', '', '', '',
-    { formula: `SUM(E${DATA_START}:E${lastData})` },
+    '합계', '', '', '', '',
     { formula: `SUM(F${DATA_START}:F${lastData})` },
     { formula: `SUM(G${DATA_START}:G${lastData})` },
+    { formula: `SUM(H${DATA_START}:H${lastData})` },
   ])
   sumRow.getCell(1).font = { bold: true }
-  ;[5, 6, 7].forEach(col => {
+  ;[6, 7, 8].forEach(col => {
     sumRow.getCell(col).font      = { bold: true }
     sumRow.getCell(col).numFmt    = '#,##0'
     sumRow.getCell(col).alignment = { horizontal: 'right' }
