@@ -26,6 +26,9 @@ export default function AdminPage() {
   const [monthFilter, setMonthFilter] = useState(() => String(new Date().getMonth() + 1))
   const [availableYears, setAvailableYears] = useState<string[]>(() => [String(new Date().getFullYear()).slice(2)])
 
+  // 검색
+  const [searchQuery, setSearchQuery] = useState('')
+
   // 월별 정산
   const [monthInput, setMonthInput] = useState(() => {
     const now = new Date()
@@ -263,10 +266,17 @@ export default function AdminPage() {
     return true
   })
 
-  // 상태 필터까지 적용 — 테이블 표시용
-  const filteredRequests = statusFilter === 'all'
-    ? yearMonthFiltered
-    : yearMonthFiltered.filter(r => r.status === statusFilter)
+  // 상태 + 검색어 필터 — 테이블 표시용
+  const q = searchQuery.trim().toLowerCase()
+  const filteredRequests = yearMonthFiltered.filter(r => {
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false
+    if (q) {
+      const hit = [r.receipt_number, r.item_name, r.spec, r.requester_name, r.vendor, r.memo]
+        .some(field => field?.toLowerCase().includes(q))
+      if (!hit) return false
+    }
+    return true
+  })
 
   // 카드 통계 — 선택 연월 기준
   const settledItems = yearMonthFiltered.filter(r => r.status === 'settled')
@@ -346,6 +356,29 @@ export default function AdminPage() {
             {/* 구분선 */}
             <div className="w-px h-5 bg-gray-300" />
 
+            {/* 검색창 */}
+            <div className="relative">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none">🔍</span>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="접수번호·물품명·규격·요청자·구입처·메모"
+                className="pl-8 pr-7 py-1.5 text-sm border rounded-lg bg-white text-gray-700 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-base leading-none"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            {/* 구분선 */}
+            <div className="w-px h-5 bg-gray-300" />
+
             {/* 상태 필터 */}
             {['all', 'new', 'reviewing', 'purchased', 'settled', 'rejected'].map(s => (
               <button
@@ -391,7 +424,9 @@ export default function AdminPage() {
             {loading ? (
               <div className="py-16 text-center text-gray-400">불러오는 중...</div>
             ) : filteredRequests.length === 0 ? (
-              <div className="py-16 text-center text-gray-400">요청 없음</div>
+              <div className="py-16 text-center text-gray-400">
+                {searchQuery ? `"${searchQuery}" 검색 결과 없음` : '요청 없음'}
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-200">
