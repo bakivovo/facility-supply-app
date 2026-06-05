@@ -31,6 +31,11 @@ export default function AdminPage() {
   const [bulkExcelLoading, setBulkExcelLoading] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // 연도·월 필터
+  const [yearFilter, setYearFilter] = useState(() => String(new Date().getFullYear()).slice(2))
+  const [monthFilter, setMonthFilter] = useState(() => String(new Date().getMonth() + 1))
+  const [availableYears, setAvailableYears] = useState<string[]>(() => [String(new Date().getFullYear()).slice(2)])
+
   // 월별 정산
   const [monthInput, setMonthInput] = useState(() => {
     const now = new Date()
@@ -62,6 +67,24 @@ export default function AdminPage() {
       }
     })
   }, [router])
+
+  // 연도 목록: 전체 접수번호에서 YY 추출 (상태 필터와 무관하게 1회 fetch)
+  useEffect(() => {
+    if (!authChecked) return
+    fetch('/api/admin/requests')
+      .then(r => r.json())
+      .then(({ data }) => {
+        const yearSet = new Set<string>()
+        const currentYY = String(new Date().getFullYear()).slice(2)
+        yearSet.add(currentYY)
+        ;(data || []).forEach((r: any) => {
+          const yy = r.receipt_number?.split('-')[0]
+          if (yy && /^\d{2}$/.test(yy)) yearSet.add(yy)
+        })
+        setAvailableYears(Array.from(yearSet).sort())
+      })
+      .catch(() => {})
+  }, [authChecked])
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -243,7 +266,16 @@ export default function AdminPage() {
     return acc
   }, {})
 
-  const allChecked = requests.length > 0 && selectedIds.length === requests.length
+  // 연도·월 클라이언트 필터 (접수번호 앞 YY-MM 기준)
+  const filteredRequests = requests.filter(req => {
+    const parts = req.receipt_number?.split('-') ?? []
+    if (parts.length < 2) return false
+    if (parts[0] !== yearFilter) return false
+    if (monthFilter !== 'all' && parseInt(parts[1]) !== parseInt(monthFilter)) return false
+    return true
+  })
+
+  const allChecked = filteredRequests.length > 0 && filteredRequests.every(r => selectedIds.includes(r.id))
 
   // 세션 확인 전 빈 화면 (깜빡임 방지)
   if (!authChecked) {
@@ -274,8 +306,35 @@ export default function AdminPage() {
             ))}
           </div>
 
-          {/* 필터 탭 */}
-          <div className="flex gap-1 mb-3 flex-wrap">
+          {/* 필터 바 */}
+          <div className="flex gap-2 mb-3 flex-wrap items-center">
+            {/* 연도 드롭다운 */}
+            <select
+              value={yearFilter}
+              onChange={e => setYearFilter(e.target.value)}
+              className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {availableYears.map(yy => (
+                <option key={yy} value={yy}>{`20${yy}`}년</option>
+              ))}
+            </select>
+
+            {/* 월 드롭다운 */}
+            <select
+              value={monthFilter}
+              onChange={e => setMonthFilter(e.target.value)}
+              className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all">전체 월</option>
+              {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                <option key={m} value={String(m)}>{m}월</option>
+              ))}
+            </select>
+
+            {/* 구분선 */}
+            <div className="w-px h-5 bg-gray-300" />
+
+            {/* 상태 필터 */}
             {['all', 'new', 'reviewing', 'purchased', 'settled', 'rejected'].map(s => (
               <button
                 key={s}
@@ -287,6 +346,7 @@ export default function AdminPage() {
                 {s === 'all' ? '전체' : STATUS_LABEL[s as Status]}
               </button>
             ))}
+
             <button onClick={fetchAll} className="ml-auto px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
           </div>
 
@@ -318,7 +378,7 @@ export default function AdminPage() {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {loading ? (
               <div className="py-16 text-center text-gray-400">불러오는 중...</div>
-            ) : requests.length === 0 ? (
+            ) : filteredRequests.length === 0 ? (
               <div className="py-16 text-center text-gray-400">요청 없음</div>
             ) : (
               <table className="w-full text-sm">
@@ -328,7 +388,7 @@ export default function AdminPage() {
                       <input
                         type="checkbox"
                         checked={allChecked}
-                        onChange={e => setSelectedIds(e.target.checked ? requests.map(r => r.id) : [])}
+                        onChange={e => setSelectedIds(e.target.checked ? filteredRequests.map(r => r.id) : [])}
                         className="rounded"
                       />
                     </th>
@@ -345,7 +405,7 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {requests.map(req => (
+                  {filteredRequests.map(req => (
                     <>
                       <tr
                         key={req.id}
