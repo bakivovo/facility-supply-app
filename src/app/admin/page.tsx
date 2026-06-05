@@ -8,22 +8,12 @@ import RequestDetailPanel from '@/components/RequestDetailPanel'
 import type { Request, Status } from '@/types'
 import { STATUS_LABEL, STATUS_COLOR, URGENCY_LABEL, URGENCY_COLOR } from '@/types'
 
-interface Stats {
-  new: number
-  reviewing: number
-  purchased: number
-  settled_purchase: number
-  settled_shipping: number
-  settled_total: number
-}
-
 export default function AdminPage() {
   const router = useRouter()
   const [authChecked, setAuthChecked] = useState(false)
   const [activeTab, setActiveTab] = useState('dashboard')
   const [requests, setRequests] = useState<Request[]>([])
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
-  const [stats, setStats] = useState<Stats>({ new: 0, reviewing: 0, purchased: 0, settled_purchase: 0, settled_shipping: 0, settled_total: 0 })
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -88,17 +78,15 @@ export default function AdminPage() {
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const [reqRes, vendorRes, statsRes] = await Promise.all([
-      fetch(`/api/admin/requests${statusFilter !== 'all' ? `?status=${statusFilter}` : ''}`),
+    const [reqRes, vendorRes] = await Promise.all([
+      fetch('/api/admin/requests'),   // 항상 전체 fetch — 상태·연월 필터는 클라이언트에서 처리
       fetch('/api/vendors'),
-      fetch('/api/admin/stats'),
     ])
-    const [reqData, vendorData, statsData] = await Promise.all([reqRes.json(), vendorRes.json(), statsRes.json()])
+    const [reqData, vendorData] = await Promise.all([reqRes.json(), vendorRes.json()])
     setRequests(reqData.data || [])
     setVendors(vendorData.data || [])
-    setStats(statsData.data || { new: 0, reviewing: 0, purchased: 0, settled_purchase: 0, settled_shipping: 0, settled_total: 0 })
     setLoading(false)
-  }, [statusFilter])
+  }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
@@ -266,14 +254,35 @@ export default function AdminPage() {
     return acc
   }, {})
 
-  // 연도·월 클라이언트 필터 (접수번호 앞 YY-MM 기준)
-  const filteredRequests = requests.filter(req => {
+  // 연도·월 필터 (상태 무관) — 카드 통계 기준
+  const yearMonthFiltered = requests.filter(req => {
     const parts = req.receipt_number?.split('-') ?? []
     if (parts.length < 2) return false
     if (parts[0] !== yearFilter) return false
     if (monthFilter !== 'all' && parseInt(parts[1]) !== parseInt(monthFilter)) return false
     return true
   })
+
+  // 상태 필터까지 적용 — 테이블 표시용
+  const filteredRequests = statusFilter === 'all'
+    ? yearMonthFiltered
+    : yearMonthFiltered.filter(r => r.status === statusFilter)
+
+  // 카드 통계 — 선택 연월 기준
+  const settledItems = yearMonthFiltered.filter(r => r.status === 'settled')
+  const dynamicStats = {
+    new:              yearMonthFiltered.filter(r => r.status === 'new').length,
+    reviewing:        yearMonthFiltered.filter(r => r.status === 'reviewing').length,
+    purchased:        yearMonthFiltered.filter(r => r.status === 'purchased').length,
+    settled_purchase: settledItems.reduce((s, r) => s + (r.amount       || 0), 0),
+    settled_shipping: settledItems.reduce((s, r) => s + (r.shipping_fee || 0), 0),
+    settled_total:    settledItems.reduce((s, r) => s + (r.amount || 0) + (r.shipping_fee || 0), 0),
+  }
+
+  // 카드 상단 기준 텍스트
+  const filterLabel = monthFilter === 'all'
+    ? `20${yearFilter}년 전체 기준`
+    : `20${yearFilter}년 ${monthFilter}월 기준`
 
   const allChecked = filteredRequests.length > 0 && filteredRequests.every(r => selectedIds.includes(r.id))
 
@@ -290,20 +299,23 @@ export default function AdminPage() {
       {activeTab === 'dashboard' && (
         <div className="max-w-7xl mx-auto px-4 py-6">
           {/* 대시보드 카드 */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-            {[
-              { label: '신규 요청', value: stats.new, color: 'bg-green-50 border-green-200 text-green-700' },
-              { label: '처리 중', value: stats.reviewing + stats.purchased, color: 'bg-orange-50 border-orange-200 text-orange-700' },
-              { label: '구입 완료', value: stats.purchased, color: 'bg-blue-50 border-blue-200 text-blue-700' },
-              { label: '이번 달 구매금액', value: stats.settled_purchase.toLocaleString() + '원', color: 'bg-purple-50 border-purple-200 text-purple-700' },
-              { label: '이번 달 배송비', value: stats.settled_shipping.toLocaleString() + '원', color: 'bg-pink-50 border-pink-200 text-pink-700' },
-              { label: '이번 달 합계', value: stats.settled_total.toLocaleString() + '원', color: 'bg-gray-50 border-gray-200 text-gray-700' },
-            ].map((card, i) => (
-              <div key={i} className={`bg-white border rounded-xl p-4 ${card.color}`}>
-                <p className="text-xs font-medium opacity-70 mb-1">{card.label}</p>
-                <p className="text-xl font-bold">{card.value}</p>
-              </div>
-            ))}
+          <div className="mb-6">
+            <p className="text-xs text-gray-400 text-right mb-1.5">{filterLabel}</p>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[
+                { label: '신규 요청',  value: dynamicStats.new,                                        color: 'bg-green-50  border-green-200  text-green-700'  },
+                { label: '처리 중',    value: dynamicStats.reviewing + dynamicStats.purchased,          color: 'bg-orange-50 border-orange-200 text-orange-700' },
+                { label: '구입 완료',  value: dynamicStats.purchased,                                  color: 'bg-blue-50   border-blue-200   text-blue-700'   },
+                { label: '구매금액',   value: dynamicStats.settled_purchase.toLocaleString() + '원',   color: 'bg-purple-50 border-purple-200 text-purple-700' },
+                { label: '배송비',     value: dynamicStats.settled_shipping.toLocaleString() + '원',   color: 'bg-pink-50   border-pink-200   text-pink-700'   },
+                { label: '합계',       value: dynamicStats.settled_total.toLocaleString()    + '원',   color: 'bg-gray-50   border-gray-200   text-gray-700'   },
+              ].map((card, i) => (
+                <div key={i} className={`bg-white border rounded-xl p-4 ${card.color}`}>
+                  <p className="text-xs font-medium opacity-70 mb-1">{card.label}</p>
+                  <p className="text-xl font-bold">{card.value}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* 필터 바 */}
