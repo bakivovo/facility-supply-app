@@ -49,15 +49,15 @@ export async function buildSettlementWorkbook(
   const ws1 = workbook.addWorksheet('정산내역')
   ws1.columns = [
     { key: 'receipt_number', width: 20 },  // A
-    { key: 'item_name',      width: 24 },  // B
-    { key: 'spec',           width: 14 },  // C
-    { key: 'vendor',         width: 14 },  // D
-    { key: 'purchase_date',  width: 12 },  // E
-    { key: 'quantity',       width: 8  },  // F
-    { key: 'unit_price',     width: 12 },  // G
-    { key: 'amount',         width: 14 },  // H
-    { key: 'shipping_fee',   width: 14 },  // I
-    { key: 'total',          width: 14 },  // J
+    { key: 'purchase_date',  width: 12 },  // B
+    { key: 'item_name',      width: 24 },  // C
+    { key: 'spec',           width: 14 },  // D
+    { key: 'quantity',       width: 8  },  // E
+    { key: 'unit_price',     width: 12 },  // F
+    { key: 'amount',         width: 14 },  // G
+    { key: 'shipping_fee',   width: 14 },  // H
+    { key: 'total',          width: 14 },  // I
+    { key: 'vendor',         width: 14 },  // J
   ]
 
   // 행1: 제목
@@ -69,7 +69,7 @@ export async function buildSettlementWorkbook(
   ws1.getRow(1).height = 32
 
   // 행2: 열 헤더
-  ws1.addRow(['접수번호', '물품명', '규격', '구입처', '구입일', '수량', '단가(원)', '구입금액(원)', '배송비(원)', '합계(원)'])
+  ws1.addRow(['접수번호', '구입일', '물품명', '규격', '수량', '단가(원)', '구입금액(원)', '배송비(원)', '합계(원)', '구입처'])
   ws1.getRow(2).eachCell(applyHeaderStyle)
 
   // 행3~: 데이터
@@ -79,20 +79,20 @@ export async function buildSettlementWorkbook(
     const fee = r.shipping_fee || 0
     const row = ws1.addRow([
       r.receipt_number || '',
+      r.purchase_date  || '',
       r.item_name      || '',
       r.spec           || '',
-      r.vendor         || '',
-      r.purchase_date  || '',
       r.quantity       || '',
       r.unit_price     || '',
       amt || '',
       fee || '',
       (amt + fee) || '',
+      r.vendor         || '',
     ])
     row.eachCell((cell, col) => {
       cell.font   = { size: 10 }
       cell.border = { top: { style: 'hair' }, bottom: { style: 'hair' }, left: { style: 'hair' }, right: { style: 'hair' } }
-      if (col >= 7) {
+      if (col >= 6 && col <= 9) {
         cell.numFmt    = '#,##0'
         cell.alignment = { horizontal: 'right', vertical: 'middle' }
       } else {
@@ -104,13 +104,14 @@ export async function buildSettlementWorkbook(
   // 합계행
   const lastData = DATA_START + items.length - 1
   const sumRow = ws1.addRow([
-    '합계', '', '', '', '', '', '',
+    '합계', '', '', '', '', '',
+    { formula: `SUM(G${DATA_START}:G${lastData})` },
     { formula: `SUM(H${DATA_START}:H${lastData})` },
     { formula: `SUM(I${DATA_START}:I${lastData})` },
-    { formula: `SUM(J${DATA_START}:J${lastData})` },
+    '',
   ])
   sumRow.getCell(1).font = { bold: true }
-  ;[8, 9, 10].forEach(col => {
+  ;[7, 8, 9].forEach(col => {
     sumRow.getCell(col).font      = { bold: true }
     sumRow.getCell(col).numFmt    = '#,##0'
     sumRow.getCell(col).alignment = { horizontal: 'right' }
