@@ -153,15 +153,19 @@ export default function RequestPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 헤더 */}
-      <header className="bg-blue-700 text-white px-4 py-5 shadow">
+      <header className="bg-blue-700 text-white px-6 py-5 shadow shrink-0">
         <p className="text-xs opacity-80 mb-1">동양미래대학교 사무처 시설관리팀</p>
         <h1 className="text-xl font-bold leading-snug">물품 요청서</h1>
       </header>
 
-      <main className="max-w-xl mx-auto px-4 py-6 space-y-6">
-        <form onSubmit={handleSubmit} className="space-y-5">
+      {/* 2분할 본문 */}
+      <main className="flex flex-col md:flex-row flex-1 min-h-0">
+
+        {/* ── 왼쪽: 요청 폼 ── */}
+        <div className="w-full md:w-1/2 overflow-y-auto border-b md:border-b-0 md:border-r border-gray-200 px-5 py-6 bg-white">
+        <form onSubmit={handleSubmit} className="space-y-5 max-w-lg mx-auto">
 
           {/* 이름 */}
           <div>
@@ -360,9 +364,11 @@ export default function RequestPage() {
             {submitting ? '제출 중...' : '요청 제출하기'}
           </button>
         </form>
+        </div>{/* /왼쪽 칼럼 */}
 
-        {/* ── 내 요청 조회 (이름 기준) ── */}
-        <div className="border-t border-gray-200 pt-6">
+        {/* ── 오른쪽: 내 요청 조회 ── */}
+        <div className="w-full md:w-1/2 overflow-y-auto px-5 py-6 bg-gray-50">
+          <div className="max-w-lg mx-auto">
           <h2 className="text-base font-bold text-gray-700 mb-1">내 요청 조회</h2>
           <p className="text-xs text-gray-400 mb-3">이름으로 제출한 모든 요청을 확인할 수 있습니다.</p>
           <form onSubmit={handleLookup} className="flex gap-2">
@@ -457,7 +463,8 @@ export default function RequestPage() {
               )}
             </div>
           )}
-        </div>
+          </div>
+        </div>{/* /오른쪽 칼럼 */}
 
       </main>
     </div>
