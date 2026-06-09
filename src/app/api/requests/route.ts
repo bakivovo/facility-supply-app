@@ -93,12 +93,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ items: names })
   }
 
-  // 이름으로 내 요청 목록 조회
-  if (requester_name) {
+  // 통합 검색 (이름 OR 물품명 OR 규격)
+  const query = searchParams.get('query') || requester_name  // 하위 호환
+  if (query) {
+    const q = query.trim()
     const { data, error } = await supabase
       .from('requests')
       .select('receipt_number, status, reject_reason, item_name, spec, quantity, unit, purchase_quantity, unit_price, purchase_date, amount, vendor, created_at')
-      .eq('requester_name', requester_name.trim())
+      .or(`requester_name.ilike.%${q}%,item_name.ilike.%${q}%,spec.ilike.%${q}%`)
       .order('created_at', { ascending: false })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

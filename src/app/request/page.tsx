@@ -33,8 +33,8 @@ export default function RequestPage() {
   const [submitResult, setSubmitResult] = useState<{ receipt_number: string } | null>(null)
   const [error, setError] = useState('')
 
-  // 이름으로 내 요청 목록 조회
-  const [lookupName, setLookupName] = useState('')
+  // 통합 검색 (이름 OR 물품명 OR 규격)
+  const [lookupQuery, setLookupQuery] = useState('')
   const [lookupResults, setLookupResults] = useState<any[] | null>(null)
   const [lookupError, setLookupError] = useState('')
   const [lookupLoading, setLookupLoading] = useState(false)
@@ -113,10 +113,10 @@ export default function RequestPage() {
     e.preventDefault()
     setLookupError('')
     setLookupResults(null)
-    if (!lookupName.trim()) { setLookupError('이름을 입력해주세요.'); return }
+    if (!lookupQuery.trim()) { setLookupError('검색어를 입력해주세요.'); return }
     setLookupLoading(true)
     try {
-      const res = await fetch(`/api/requests?requester_name=${encodeURIComponent(lookupName.trim())}`)
+      const res = await fetch(`/api/requests?query=${encodeURIComponent(lookupQuery.trim())}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || '조회 실패')
       const all: any[] = data.data || []
@@ -400,9 +400,9 @@ export default function RequestPage() {
           <form onSubmit={handleLookup} className="flex gap-2">
             <input
               type="text"
-              value={lookupName}
-              onChange={e => setLookupName(e.target.value)}
-              placeholder="이름 입력 (예: 홍길동)"
+              value={lookupQuery}
+              onChange={e => setLookupQuery(e.target.value)}
+              placeholder="이름 또는 물품명으로 검색"
               className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
