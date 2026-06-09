@@ -33,12 +33,6 @@ export default function RequestPage() {
   const [submitResult, setSubmitResult] = useState<{ receipt_number: string } | null>(null)
   const [error, setError] = useState('')
 
-  // 접수번호 단건 조회
-  const [queryNum, setQueryNum] = useState('')
-  const [queryResult, setQueryResult] = useState<any>(null)
-  const [queryError, setQueryError] = useState('')
-  const [querying, setQuerying] = useState(false)
-
   // 이름으로 내 요청 목록 조회
   const [lookupName, setLookupName] = useState('')
   const [lookupResults, setLookupResults] = useState<any[] | null>(null)
@@ -127,24 +121,6 @@ export default function RequestPage() {
       setLookupError(err.message)
     } finally {
       setLookupLoading(false)
-    }
-  }
-
-  const handleQuery = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setQueryError('')
-    setQueryResult(null)
-    if (!queryNum.trim()) { setQueryError('접수번호를 입력해주세요.'); return }
-    setQuerying(true)
-    try {
-      const res = await fetch(`/api/requests?receipt_number=${encodeURIComponent(queryNum.trim())}`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || '조회 실패')
-      setQueryResult(data.data)
-    } catch (err: any) {
-      setQueryError(err.message)
-    } finally {
-      setQuerying(false)
     }
   }
 
@@ -384,50 +360,6 @@ export default function RequestPage() {
             {submitting ? '제출 중...' : '요청 제출하기'}
           </button>
         </form>
-
-        {/* 현황 조회 */}
-        <div className="border-t border-gray-200 pt-6">
-          <h2 className="text-base font-bold text-gray-700 mb-3">내 요청 현황 확인</h2>
-          <form onSubmit={handleQuery} className="flex gap-2">
-            <input
-              type="text"
-              value={queryNum}
-              onChange={e => setQueryNum(e.target.value)}
-              placeholder="예: 25-05-전기-003"
-              className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              type="submit"
-              disabled={querying}
-              className="px-5 py-3 bg-gray-700 text-white rounded-xl font-semibold hover:bg-gray-800 transition disabled:opacity-60"
-            >
-              {querying ? '...' : '조회'}
-            </button>
-          </form>
-
-          {queryError && (
-            <div className="mt-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{queryError}</div>
-          )}
-
-          {queryResult && (
-            <div className="mt-3 bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-sm text-gray-500">{queryResult.receipt_number}</span>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold ${STATUS_COLOR[queryResult.status as keyof typeof STATUS_COLOR]}`}>
-                  {STATUS_LABEL[queryResult.status as keyof typeof STATUS_LABEL]}
-                </span>
-              </div>
-              <p className="text-base font-semibold text-gray-800">{queryResult.item_name}</p>
-              <p className="text-sm text-gray-500 mt-1">{queryResult.category}</p>
-              {queryResult.status === 'rejected' && queryResult.reject_reason && (
-                <div className="mt-2 bg-red-50 rounded-lg px-3 py-2 text-sm text-red-700">
-                  <span className="font-semibold">반려 사유:</span> {queryResult.reject_reason}
-                </div>
-              )}
-              <p className="text-xs text-gray-400 mt-2">접수일: {queryResult.created_at?.slice(0, 10)}</p>
-            </div>
-          )}
-        </div>
 
         {/* ── 내 요청 조회 (이름 기준) ── */}
         <div className="border-t border-gray-200 pt-6">
