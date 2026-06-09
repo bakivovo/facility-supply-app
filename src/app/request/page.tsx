@@ -492,12 +492,12 @@ export default function RequestPage() {
                               <span className="ml-1.5 font-medium text-gray-700">{r.unit_price.toLocaleString()}원</span>
                             </div>
                           )}
-                          {r.purchase_quantity != null && (
-                            <div>
-                              <span className="text-gray-400">구입수량</span>
-                              <span className="ml-1.5 font-medium text-gray-700">{r.purchase_quantity}{r.unit}</span>
-                            </div>
-                          )}
+                          <div>
+                            <span className="text-gray-400">구입수량</span>
+                            <span className="ml-1.5 font-medium text-gray-700">
+                              {(r.purchase_quantity ?? r.quantity)}{r.unit}
+                            </span>
+                          </div>
                           {r.purchase_date && (
                             <div>
                               <span className="text-gray-400">구입일자</span>
