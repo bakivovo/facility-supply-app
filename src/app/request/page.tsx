@@ -38,6 +38,9 @@ export default function RequestPage() {
   const [lookupResults, setLookupResults] = useState<any[] | null>(null)
   const [lookupError, setLookupError] = useState('')
   const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupYearFilter, setLookupYearFilter] = useState('all')
+  const [lookupMonthFilter, setLookupMonthFilter] = useState('all')
+  const [lookupAvailableYears, setLookupAvailableYears] = useState<string[]>([])
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const autocompleteTimer = useRef<NodeJS.Timeout | undefined>(undefined)
@@ -116,13 +119,36 @@ export default function RequestPage() {
       const res = await fetch(`/api/requests?requester_name=${encodeURIComponent(lookupName.trim())}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || '조회 실패')
-      setLookupResults(data.data)
+      const all: any[] = data.data || []
+
+      // 연도 목록 자동 생성 (접수번호 YY 기준)
+      const yearSet = new Set<string>()
+      all.forEach((r: any) => {
+        const yy = r.receipt_number?.split('-')[0]
+        if (yy && /^\d{2}$/.test(yy)) yearSet.add(yy)
+      })
+      setLookupAvailableYears(Array.from(yearSet).sort().reverse())
+
+      setLookupResults(all)
     } catch (err: any) {
       setLookupError(err.message)
     } finally {
       setLookupLoading(false)
     }
   }
+
+  // 연도·월 필터 적용
+  const filteredLookupResults = lookupResults === null ? null : lookupResults.filter((r: any) => {
+    if (lookupYearFilter !== 'all') {
+      const yy = r.receipt_number?.split('-')[0]
+      if (yy !== lookupYearFilter) return false
+    }
+    if (lookupMonthFilter !== 'all') {
+      const mm = r.receipt_number?.split('-')[1]
+      if (!mm || parseInt(mm) !== parseInt(lookupMonthFilter)) return false
+    }
+    return true
+  })
 
   // 제출 완료 화면
   if (submitResult) {
@@ -388,16 +414,44 @@ export default function RequestPage() {
             </button>
           </form>
 
+          {/* 연도·월 필터 — 조회 결과가 있을 때만 표시 */}
+          {lookupResults !== null && (
+            <div className="flex gap-2 mt-3">
+              <select
+                value={lookupYearFilter}
+                onChange={e => setLookupYearFilter(e.target.value)}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="all">전체 연도</option>
+                {lookupAvailableYears.map(yy => (
+                  <option key={yy} value={yy}>20{yy}년</option>
+                ))}
+              </select>
+              <select
+                value={lookupMonthFilter}
+                onChange={e => setLookupMonthFilter(e.target.value)}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                <option value="all">전체 월</option>
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={String(m)}>{m}월</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {lookupError && (
             <div className="mt-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{lookupError}</div>
           )}
 
-          {lookupResults !== null && (
+          {filteredLookupResults !== null && (
             <div className="mt-3 space-y-2">
-              {lookupResults.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-sm">요청 내역이 없습니다.</div>
+              {filteredLookupResults.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">
+                  {lookupResults?.length === 0 ? '요청 내역이 없습니다.' : '선택한 기간에 해당하는 요청이 없습니다.'}
+                </div>
               ) : (
-                lookupResults.map((r: any) => {
+                filteredLookupResults.map((r: any) => {
                   const isPurchased = r.status === 'purchased' || r.status === 'settled'
                   return (
                     <div key={r.receipt_number} className="bg-white border border-gray-200 rounded-xl p-4">
@@ -446,6 +500,18 @@ export default function RequestPage() {
                             <div>
                               <span className="text-gray-400">구입금액</span>
                               <span className="ml-1.5 font-semibold text-blue-700">{r.amount.toLocaleString()}원</span>
+                            </div>
+                          )}
+                          {r.vendor && r.vendor.startsWith('http') && (
+                            <div className="col-span-2 pt-1">
+                              <a
+                                href={r.vendor}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-blue-600 hover:underline text-xs font-medium"
+                              >
+                                🔗 구입처 링크
+                              </a>
                             </div>
                           )}
                         </div>

@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
   if (requester_name) {
     const { data, error } = await supabase
       .from('requests')
-      .select('receipt_number, status, reject_reason, item_name, spec, quantity, unit, purchase_quantity, unit_price, purchase_date, amount, created_at')
+      .select('receipt_number, status, reject_reason, item_name, spec, quantity, unit, purchase_quantity, unit_price, purchase_date, amount, vendor, created_at')
       .eq('requester_name', requester_name.trim())
       .order('created_at', { ascending: false })
 
