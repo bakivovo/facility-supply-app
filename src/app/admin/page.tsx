@@ -307,29 +307,33 @@ export default function AdminPage() {
 
       {/* ─── 요청 목록 탭 ─── */}
       {activeTab === 'dashboard' && (
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          {/* 대시보드 카드 */}
-          <div className="mb-6">
-            <p className="text-xs text-gray-400 text-right mb-1.5">{filterLabel}</p>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              {[
-                { label: '신규 요청',  value: dynamicStats.new,                                        color: 'bg-green-50  border-green-200  text-green-700'  },
-                { label: '처리 중',    value: dynamicStats.reviewing + dynamicStats.purchased,          color: 'bg-orange-50 border-orange-200 text-orange-700' },
-                { label: '구입 완료',  value: dynamicStats.purchased,                                  color: 'bg-blue-50   border-blue-200   text-blue-700'   },
-                { label: '구매금액',   value: dynamicStats.settled_purchase.toLocaleString() + '원',   color: 'bg-purple-50 border-purple-200 text-purple-700' },
-                { label: '배송비',     value: dynamicStats.settled_shipping.toLocaleString() + '원',   color: 'bg-pink-50   border-pink-200   text-pink-700'   },
-                { label: '합계',       value: dynamicStats.settled_total.toLocaleString()    + '원',   color: 'bg-gray-50   border-gray-200   text-gray-700'   },
-              ].map((card, i) => (
-                <div key={i} className={`bg-white border rounded-xl p-4 ${card.color}`}>
-                  <p className="text-xs font-medium opacity-70 mb-1">{card.label}</p>
-                  <p className="text-xl font-bold">{card.value}</p>
-                </div>
-              ))}
+        <div className="max-w-7xl mx-auto px-4 pb-6">
+
+          {/* ══ 고정 영역 (sticky) ══ */}
+          <div className="sticky top-0 z-20 bg-gray-100 -mx-4 px-4 pt-6 pb-3 shadow-[0_4px_6px_-2px_rgba(0,0,0,0.06)]">
+
+            {/* 대시보드 카드 */}
+            <div className="mb-3">
+              <p className="text-xs text-gray-400 text-right mb-1.5">{filterLabel}</p>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                {[
+                  { label: '신규 요청',  value: dynamicStats.new,                                        color: 'bg-green-50  border-green-200  text-green-700'  },
+                  { label: '처리 중',    value: dynamicStats.reviewing + dynamicStats.purchased,          color: 'bg-orange-50 border-orange-200 text-orange-700' },
+                  { label: '구입 완료',  value: dynamicStats.purchased,                                  color: 'bg-blue-50   border-blue-200   text-blue-700'   },
+                  { label: '구매금액',   value: dynamicStats.settled_purchase.toLocaleString() + '원',   color: 'bg-purple-50 border-purple-200 text-purple-700' },
+                  { label: '배송비',     value: dynamicStats.settled_shipping.toLocaleString() + '원',   color: 'bg-pink-50   border-pink-200   text-pink-700'   },
+                  { label: '합계',       value: dynamicStats.settled_total.toLocaleString()    + '원',   color: 'bg-gray-50   border-gray-200   text-gray-700'   },
+                ].map((card, i) => (
+                  <div key={i} className={`bg-white border rounded-xl p-4 ${card.color}`}>
+                    <p className="text-xs font-medium opacity-70 mb-1">{card.label}</p>
+                    <p className="text-xl font-bold">{card.value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
 
           {/* 필터 바 */}
-          <div className="flex gap-2 mb-3 flex-wrap items-center">
+          <div className="flex gap-2 mb-0 flex-wrap items-center">
             {/* 연도 드롭다운 */}
             <select
               value={yearFilter}
@@ -397,7 +401,7 @@ export default function AdminPage() {
 
           {/* 일괄 처리 바 */}
           {selectedIds.length > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-3 flex items-center gap-3 flex-wrap">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mt-3 flex items-center gap-3 flex-wrap">
               <span className="text-sm font-semibold text-blue-700">{selectedIds.length}건 선택됨</span>
               {(['reviewing', 'purchased', 'settled'] as Status[]).map(s => (
                 <button
@@ -419,8 +423,10 @@ export default function AdminPage() {
             </div>
           )}
 
+          </div>{/* ── /sticky 고정 영역 ── */}
+
           {/* 요청 목록 */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-3">
             {loading ? (
               <div className="py-16 text-center text-gray-400">불러오는 중...</div>
             ) : filteredRequests.length === 0 ? (
