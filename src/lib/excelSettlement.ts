@@ -82,7 +82,7 @@ export async function buildSettlementWorkbook(
       r.purchase_date  || '',
       r.item_name      || '',
       r.spec           || '',
-      r.quantity       || '',
+      r.purchase_quantity ?? r.quantity ?? '',
       r.unit_price     || '',
       amt || '',
       fee || '',

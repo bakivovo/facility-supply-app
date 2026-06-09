@@ -18,6 +18,7 @@ export interface Request {
   reject_reason: string | null
   vendor: string | null
   unit_price: number | null
+  purchase_quantity: number | null
   amount: number | null
   shipping_fee: number | null
   purchase_date: string | null

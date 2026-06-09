@@ -490,7 +490,7 @@ export default function AdminPage() {
                           {req.unit_price != null ? req.unit_price.toLocaleString() : '-'}
                         </td>
                         <td className="px-3 py-3 text-right hidden xl:table-cell text-gray-700 text-xs tabular-nums">
-                          {req.quantity}
+                          {req.purchase_quantity ?? req.quantity}
                         </td>
                         <td className="px-3 py-3 text-right hidden lg:table-cell text-gray-700 text-xs tabular-nums">
                           {req.amount != null ? req.amount.toLocaleString() : '-'}

@@ -130,10 +130,15 @@ function ReceiptDropzoneCard({ index, label, url, onLabelChange, onFileDrop, onR
 export default function RequestDetailPanel({ request, vendors, onUpdate, onClose }: Props) {
   const [vendorInput, setVendorInput] = useState(request.vendor || '')
   const [unitPrice, setUnitPrice] = useState(request.unit_price?.toString() || '')
-  const [purchaseQty, setPurchaseQty] = useState(request.quantity?.toString() || '1')
+  // 구입수량: purchase_quantity 우선, 없으면 요청수량(quantity) 기본값
+  const [purchaseQty, setPurchaseQty] = useState(
+    request.purchase_quantity != null
+      ? request.purchase_quantity.toString()
+      : (request.quantity?.toString() || '1')
+  )
   const [shippingFee, setShippingFee] = useState(request.shipping_fee?.toString() || '')
 
-  // 단가 × 수량 = 구입금액 자동 계산
+  // 단가 × 구입수량 = 구입금액 자동 계산
   const calcAmount = (parseInt(unitPrice || '0') || 0) * (parseInt(purchaseQty || '0') || 0)
   const amount = calcAmount > 0 ? calcAmount.toString() : (request.amount?.toString() || '')
   const [purchaseDate, setPurchaseDate] = useState(request.purchase_date || '')
@@ -185,7 +190,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           ids: [request.id],
           vendor: vendorInput || null,
           unit_price: unitPrice ? parseInt(unitPrice) : null,
-          quantity: purchaseQty ? parseInt(purchaseQty) : null,
+          purchase_quantity: purchaseQty ? parseInt(purchaseQty) : null,
           amount: calcAmount > 0 ? calcAmount : (request.amount ?? null),
           shipping_fee: shippingFee ? parseInt(shippingFee) : null,
           purchase_date: purchaseDate || null,
@@ -241,6 +246,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           status: nextStatus,
           vendor: vendorInput || null,
           unit_price: unitPrice ? parseInt(unitPrice) : null,
+          purchase_quantity: purchaseQty ? parseInt(purchaseQty) : null,
           amount: calcAmount > 0 ? calcAmount : (amount ? parseInt(amount) : null),
           shipping_fee: shippingFee ? parseInt(shippingFee) : null,
           purchase_date: purchaseDate || null,
@@ -419,7 +425,12 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600 font-medium mb-1 block">수량</label>
+              <label className="text-xs text-gray-600 font-medium mb-1 block">
+                구입수량
+                {request.purchase_quantity == null && (
+                  <span className="text-gray-400 font-normal ml-1">(요청: {request.quantity}{request.unit})</span>
+                )}
+              </label>
               <input
                 type="number"
                 value={purchaseQty}
