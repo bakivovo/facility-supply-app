@@ -77,9 +77,11 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const supabase = getSupabase()
   const { searchParams } = new URL(request.url)
-  const receipt_number = searchParams.get('receipt_number')
-  const autocomplete = searchParams.get('autocomplete')
+  const receipt_number  = searchParams.get('receipt_number')
+  const autocomplete    = searchParams.get('autocomplete')
+  const requester_name  = searchParams.get('requester_name')
 
+  // 자동완성
   if (autocomplete) {
     const { data } = await supabase
       .from('requests')
@@ -91,6 +93,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ items: names })
   }
 
+  // 이름으로 내 요청 목록 조회
+  if (requester_name) {
+    const { data, error } = await supabase
+      .from('requests')
+      .select('receipt_number, status, reject_reason, item_name, spec, quantity, unit, purchase_quantity, unit_price, purchase_date, amount, created_at')
+      .eq('requester_name', requester_name.trim())
+      .order('created_at', { ascending: false })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ data: data || [] })
+  }
+
+  // 접수번호로 단건 조회
   if (!receipt_number) {
     return NextResponse.json({ error: '접수번호를 입력해주세요.' }, { status: 400 })
   }

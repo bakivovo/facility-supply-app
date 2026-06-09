@@ -33,11 +33,17 @@ export default function RequestPage() {
   const [submitResult, setSubmitResult] = useState<{ receipt_number: string } | null>(null)
   const [error, setError] = useState('')
 
-  // 현황 조회
+  // 접수번호 단건 조회
   const [queryNum, setQueryNum] = useState('')
   const [queryResult, setQueryResult] = useState<any>(null)
   const [queryError, setQueryError] = useState('')
   const [querying, setQuerying] = useState(false)
+
+  // 이름으로 내 요청 목록 조회
+  const [lookupName, setLookupName] = useState('')
+  const [lookupResults, setLookupResults] = useState<any[] | null>(null)
+  const [lookupError, setLookupError] = useState('')
+  const [lookupLoading, setLookupLoading] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const autocompleteTimer = useRef<NodeJS.Timeout | undefined>(undefined)
@@ -103,6 +109,24 @@ export default function RequestPage() {
       setError(err.message || '오류가 발생했습니다.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleLookup = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLookupError('')
+    setLookupResults(null)
+    if (!lookupName.trim()) { setLookupError('이름을 입력해주세요.'); return }
+    setLookupLoading(true)
+    try {
+      const res = await fetch(`/api/requests?requester_name=${encodeURIComponent(lookupName.trim())}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '조회 실패')
+      setLookupResults(data.data)
+    } catch (err: any) {
+      setLookupError(err.message)
+    } finally {
+      setLookupLoading(false)
     }
   }
 
@@ -404,6 +428,105 @@ export default function RequestPage() {
             </div>
           )}
         </div>
+
+        {/* ── 내 요청 조회 (이름 기준) ── */}
+        <div className="border-t border-gray-200 pt-6">
+          <h2 className="text-base font-bold text-gray-700 mb-1">내 요청 조회</h2>
+          <p className="text-xs text-gray-400 mb-3">이름으로 제출한 모든 요청을 확인할 수 있습니다.</p>
+          <form onSubmit={handleLookup} className="flex gap-2">
+            <input
+              type="text"
+              value={lookupName}
+              onChange={e => setLookupName(e.target.value)}
+              placeholder="이름 입력 (예: 홍길동)"
+              className="flex-1 border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              type="submit"
+              disabled={lookupLoading}
+              className="px-5 py-3 bg-gray-700 text-white rounded-xl font-semibold hover:bg-gray-800 transition disabled:opacity-60"
+            >
+              {lookupLoading ? '...' : '조회'}
+            </button>
+          </form>
+
+          {lookupError && (
+            <div className="mt-3 bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{lookupError}</div>
+          )}
+
+          {lookupResults !== null && (
+            <div className="mt-3 space-y-2">
+              {lookupResults.length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">요청 내역이 없습니다.</div>
+              ) : (
+                lookupResults.map((r: any) => {
+                  const isPurchased = r.status === 'purchased' || r.status === 'settled'
+                  return (
+                    <div key={r.receipt_number} className="bg-white border border-gray-200 rounded-xl p-4">
+                      {/* 상단: 접수번호 + 상태 배지 */}
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-mono text-xs text-gray-500">{r.receipt_number}</span>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${STATUS_COLOR[r.status as keyof typeof STATUS_COLOR]}`}>
+                          {STATUS_LABEL[r.status as keyof typeof STATUS_LABEL]}
+                        </span>
+                      </div>
+
+                      {/* 물품명 + 규격 */}
+                      <p className="font-semibold text-gray-800 text-sm">
+                        {r.item_name}
+                        {r.spec && <span className="text-gray-400 font-normal ml-1.5 text-xs">({r.spec})</span>}
+                      </p>
+
+                      {/* 기본 정보 행 */}
+                      <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
+                        <span>접수일 {r.created_at?.slice(0, 10)}</span>
+                        <span>요청수량 {r.quantity}{r.unit}</span>
+                      </div>
+
+                      {/* 구입 정보 — 구입완료·정산완료만 표시 */}
+                      {isPurchased && (
+                        <div className="mt-2.5 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                          {r.unit_price != null && (
+                            <div>
+                              <span className="text-gray-400">구입단가</span>
+                              <span className="ml-1.5 font-medium text-gray-700">{r.unit_price.toLocaleString()}원</span>
+                            </div>
+                          )}
+                          {r.purchase_quantity != null && (
+                            <div>
+                              <span className="text-gray-400">구입수량</span>
+                              <span className="ml-1.5 font-medium text-gray-700">{r.purchase_quantity}{r.unit}</span>
+                            </div>
+                          )}
+                          {r.purchase_date && (
+                            <div>
+                              <span className="text-gray-400">구입일자</span>
+                              <span className="ml-1.5 font-medium text-gray-700">{r.purchase_date}</span>
+                            </div>
+                          )}
+                          {r.amount != null && (
+                            <div>
+                              <span className="text-gray-400">구입금액</span>
+                              <span className="ml-1.5 font-semibold text-blue-700">{r.amount.toLocaleString()}원</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 반려 사유 */}
+                      {r.status === 'rejected' && r.reject_reason && (
+                        <div className="mt-2 bg-red-50 rounded-lg px-3 py-2 text-xs text-red-700">
+                          <span className="font-semibold">반려 사유:</span> {r.reject_reason}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </div>
+
       </main>
     </div>
   )
