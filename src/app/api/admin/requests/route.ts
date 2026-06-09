@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const supabase = getSupabase()
   const body = await request.json()
-  const { ids, status, reject_reason, vendor, unit_price, amount, shipping_fee, purchase_date, memo,
+  const { ids, status, reject_reason, vendor, unit_price, quantity, amount, shipping_fee, purchase_date, memo,
           delivery_photo_urls, receipt_photo_urls } = body
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -51,6 +51,7 @@ export async function PATCH(request: NextRequest) {
   if (reject_reason !== undefined) updateData.reject_reason = reject_reason
   if (vendor !== undefined) updateData.vendor = vendor
   if (unit_price !== undefined) updateData.unit_price = unit_price
+  if (quantity !== undefined) updateData.quantity = quantity
   if (amount !== undefined) updateData.amount = amount
   if (shipping_fee !== undefined) updateData.shipping_fee = shipping_fee
   if (purchase_date !== undefined) updateData.purchase_date = purchase_date

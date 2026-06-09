@@ -156,6 +156,8 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
   )
 
   const [excelLoading, setExcelLoading] = useState<'delivery' | 'receipt' | null>(null)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [saveError, setSaveError] = useState('')
 
   const isSettling = request.status === 'purchased'
 
@@ -170,6 +172,37 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
     accept: { 'image/*': [] },
     multiple: true,
   })
+
+  // 저장 (상태 변경 없이 입력값만 DB 저장)
+  const handleSave = async () => {
+    setSaveStatus('saving')
+    setSaveError('')
+    try {
+      const res = await fetch('/api/admin/requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: [request.id],
+          vendor: vendorInput || null,
+          unit_price: unitPrice ? parseInt(unitPrice) : null,
+          quantity: purchaseQty ? parseInt(purchaseQty) : null,
+          amount: calcAmount > 0 ? calcAmount : (request.amount ?? null),
+          shipping_fee: shippingFee ? parseInt(shippingFee) : null,
+          purchase_date: purchaseDate || null,
+          memo: memo || null,
+        }),
+      })
+      const { ok, data } = await safeJson(res)
+      if (!ok) throw new Error(data.error || '저장 실패')
+      onUpdate(data.data[0])
+      setSaveStatus('saved')
+      setTimeout(() => setSaveStatus('idle'), 2500)
+    } catch (err: any) {
+      setSaveError(err.message)
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 4000)
+    }
+  }
 
   // 다음 단계로 변경
   const handleNextStatus = async () => {
@@ -567,7 +600,22 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
 
       {/* 버튼 영역 */}
       {request.status !== 'settled' && request.status !== 'rejected' && (
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
+          {/* 저장 버튼 */}
+          <button
+            onClick={handleSave}
+            disabled={saveStatus === 'saving' || loading}
+            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition disabled:opacity-60"
+          >
+            {saveStatus === 'saving' ? '저장 중...' : '저장'}
+          </button>
+          {saveStatus === 'saved' && (
+            <span className="text-sm text-green-600 font-medium">저장됨 ✓</span>
+          )}
+          {saveStatus === 'error' && (
+            <span className="text-sm text-red-500">{saveError || '저장 실패'}</span>
+          )}
+
           {STATUS_FLOW[request.status] && (
             <button
               onClick={handleNextStatus}
