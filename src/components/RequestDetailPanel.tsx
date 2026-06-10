@@ -178,11 +178,29 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
     multiple: true,
   })
 
-  // 저장 (상태 변경 없이 입력값만 DB 저장)
+  // 저장 (상태 변경 없이 입력값 + 사진 DB 저장)
   const handleSave = async () => {
     setSaveStatus('saving')
     setSaveError('')
     try {
+      // 납품 사진 업로드 (새로 추가된 파일만)
+      let deliveryUrls = request.delivery_photo_urls || []
+      if (deliveryPhotos.length > 0) {
+        const newUrls = await uploadManyToStorage(deliveryPhotos, 'delivery-photos')
+        deliveryUrls = [...deliveryUrls, ...newUrls]
+      }
+
+      // 영수증 사진 업로드 (file이 있는 항목만, 기존 URL은 유지)
+      const newReceiptUrls: ReceiptPhoto[] = []
+      for (const rp of receiptPhotos) {
+        if (rp.file) {
+          const url = await uploadToStorage(rp.file, 'receipt-photos')
+          newReceiptUrls.push({ label: rp.label, url })
+        } else if (rp.url) {
+          newReceiptUrls.push({ label: rp.label, url: rp.url })
+        }
+      }
+
       const res = await fetch('/api/admin/requests', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -195,10 +213,22 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           shipping_fee: shippingFee ? parseInt(shippingFee) : null,
           purchase_date: purchaseDate || null,
           memo: memo || null,
+          delivery_photo_urls: deliveryUrls,
+          receipt_photo_urls: newReceiptUrls,
         }),
       })
       const { ok, data } = await safeJson(res)
       if (!ok) throw new Error(data.error || '저장 실패')
+
+      // 업로드 완료 후 로컬 파일 state 초기화 (중복 업로드 방지)
+      setDeliveryPhotos([])
+      setDeliveryPreviews(data.data[0].delivery_photo_urls || [])
+      setReceiptPhotos(
+        (data.data[0].receipt_photo_urls as ReceiptPhoto[] || []).length > 0
+          ? (data.data[0].receipt_photo_urls as ReceiptPhoto[]).map((r: ReceiptPhoto) => ({ label: r.label, url: r.url }))
+          : receiptPhotos.map(rp => ({ label: rp.label, url: rp.url }))
+      )
+
       onUpdate(data.data[0])
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2500)
