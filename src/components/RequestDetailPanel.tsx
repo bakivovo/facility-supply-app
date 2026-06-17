@@ -364,26 +364,57 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         )}
         <div className="col-span-2"><span className="text-gray-500">용도/사유</span><br /><strong>{request.purpose}</strong></div>
 
-        {/* 구입 금액 정보 — 구입완료·정산완료 상태에서만 표시 */}
+        {/* 구입 정보 — 구입완료·정산완료 상태에서만 표시 */}
         {(request.status === 'purchased' || request.status === 'settled') && (
           <div className="col-span-2">
-            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 flex gap-6 text-sm">
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">구입금액</p>
-                <p className="font-semibold text-gray-800">
-                  {request.amount != null ? request.amount.toLocaleString() + '원' : '-'}
-                </p>
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm space-y-2">
+              {/* 3열 그리드: 구입일자 / 단가 / 수량 */}
+              <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">구입일자</p>
+                  <p className="font-semibold text-gray-800">{request.purchase_date || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">단가</p>
+                  <p className="font-semibold text-gray-800">
+                    {request.unit_price != null ? request.unit_price.toLocaleString() + '원' : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">수량</p>
+                  <p className="font-semibold text-gray-800">
+                    {(request.purchase_quantity ?? request.quantity) != null
+                      ? `${request.purchase_quantity ?? request.quantity}${request.unit}`
+                      : '-'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">배송비</p>
-                <p className="font-semibold text-gray-800">
-                  {request.shipping_fee != null ? request.shipping_fee.toLocaleString() + '원' : '-'}
-                </p>
+              {/* 3열 그리드: 구입금액 / 배송비 / 합계 */}
+              <div className="grid grid-cols-3 gap-x-4 gap-y-2 pt-1.5 border-t border-blue-100">
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">구입금액</p>
+                  <p className="font-semibold text-gray-800">
+                    {request.amount != null ? request.amount.toLocaleString() + '원' : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">배송비</p>
+                  <p className="font-semibold text-gray-800">
+                    {request.shipping_fee != null ? request.shipping_fee.toLocaleString() + '원' : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-0.5">합계</p>
+                  <p className="font-bold text-blue-700">
+                    {((request.amount || 0) + (request.shipping_fee || 0)).toLocaleString()}원
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">합계</p>
-                <p className="font-bold text-blue-700">
-                  {((request.amount || 0) + (request.shipping_fee || 0)).toLocaleString()}원
+              {/* 메모 — 하단 별도 줄 */}
+              <div className="pt-1.5 border-t border-blue-100">
+                <p className="text-xs text-gray-500 mb-0.5">메모</p>
+                <p className="text-gray-700 text-sm leading-snug whitespace-pre-wrap">
+                  {request.memo || '-'}
                 </p>
               </div>
             </div>
