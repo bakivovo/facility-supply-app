@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import type { Request, ReceiptPhoto } from '@/types'
 import { STATUS_LABEL, STATUS_FLOW, NEXT_STATUS_LABEL } from '@/types'
-import { uploadToStorage, uploadManyToStorage } from '@/lib/uploadToStorage'
+import { uploadToStorage, uploadManyToStorage, deleteFromStorage } from '@/lib/uploadToStorage'
 
 interface Props {
   request: Request
@@ -36,9 +36,10 @@ interface ReceiptCardProps {
   onLabelChange: (label: string) => void
   onFileDrop: (file: File, previewUrl: string) => void
   onRemove: () => void
+  onRemovePhoto: () => void
 }
 
-function ReceiptDropzoneCard({ index, label, url, onLabelChange, onFileDrop, onRemove }: ReceiptCardProps) {
+function ReceiptDropzoneCard({ index, label, url, onLabelChange, onFileDrop, onRemove, onRemovePhoto }: ReceiptCardProps) {
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0]
     if (!file) return
@@ -90,9 +91,17 @@ function ReceiptDropzoneCard({ index, label, url, onLabelChange, onFileDrop, onR
         {url ? (
           /* 사진 미리보기 */
           <div className="flex items-center gap-3 p-2">
-            <a href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
-              <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border" />
-            </a>
+            <div className="relative group shrink-0">
+              <a href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
+                <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border" />
+              </a>
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); onRemovePhoto() }}
+                className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/50 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition hover:bg-red-500"
+                title="사진 삭제"
+              >×</button>
+            </div>
             <div className="flex flex-col gap-1">
               <p className="text-xs text-gray-500">사진이 선택되었습니다.</p>
               {/* 재선택 버튼 — 별도 label로 파일 인풋 트리거 */}
@@ -128,6 +137,11 @@ function ReceiptDropzoneCard({ index, label, url, onLabelChange, onFileDrop, onR
 
 // ─── 메인 패널 ───
 export default function RequestDetailPanel({ request, vendors, onUpdate, onClose }: Props) {
+  // 물품명·규격 인라인 편집
+  const [editItemName, setEditItemName] = useState(request.item_name)
+  const [editSpec, setEditSpec] = useState(request.spec || '')
+  const [editingField, setEditingField] = useState<'item_name' | 'spec' | null>(null)
+
   const [vendorInput, setVendorInput] = useState(request.vendor || '')
   const [unitPrice, setUnitPrice] = useState(request.unit_price?.toString() || '')
   // 구입수량: purchase_quantity 우선, 없으면 요청수량(quantity) 기본값
@@ -147,10 +161,9 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
   const [showReject, setShowReject] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  // 납품완료 사진
-  const [deliveryPhotos, setDeliveryPhotos] = useState<File[]>([])
-  const [deliveryPreviews, setDeliveryPreviews] = useState<string[]>(
-    request.delivery_photo_urls || []
+  // 납품완료 사진 — 통합 state (기존 URL + 새 파일 혼합)
+  const [deliveryItems, setDeliveryItems] = useState<Array<{ url: string; file?: File }>>(
+    (request.delivery_photo_urls || []).map(url => ({ url }))
   )
 
   // 영수증 사진
@@ -168,8 +181,10 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
 
   // 납품 사진 드롭존
   const onDropDelivery = useCallback((acceptedFiles: File[]) => {
-    setDeliveryPhotos(prev => [...prev, ...acceptedFiles])
-    setDeliveryPreviews(prev => [...prev, ...acceptedFiles.map(f => URL.createObjectURL(f))])
+    setDeliveryItems(prev => [
+      ...prev,
+      ...acceptedFiles.map(f => ({ url: URL.createObjectURL(f), file: f })),
+    ])
   }, [])
 
   const { getRootProps: getDeliveryRootProps, getInputProps: getDeliveryInputProps, isDragActive: isDeliveryDrag } = useDropzone({
@@ -183,21 +198,36 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
     setSaveStatus('saving')
     setSaveError('')
     try {
-      // 납품 사진 업로드 (새로 추가된 파일만)
-      let deliveryUrls = request.delivery_photo_urls || []
-      if (deliveryPhotos.length > 0) {
-        const newUrls = await uploadManyToStorage(deliveryPhotos, 'delivery-photos')
-        deliveryUrls = [...deliveryUrls, ...newUrls]
-      }
+      // ── 납품 사진 ──
+      // 삭제된 기존 URL을 Storage에서 제거
+      const originalDeliveryUrls = request.delivery_photo_urls || []
+      const keptDeliveryUrls = deliveryItems.filter(i => !i.file).map(i => i.url)
+      const removedDeliveryUrls = originalDeliveryUrls.filter(u => !keptDeliveryUrls.includes(u))
+      await Promise.all(removedDeliveryUrls.map(u => deleteFromStorage(u, 'delivery-photos')))
 
-      // 영수증 사진 업로드 (file이 있는 항목만, 기존 URL은 유지)
-      const newReceiptUrls: ReceiptPhoto[] = []
+      // 새 파일 업로드
+      const newDeliveryUrls: string[] = []
+      for (const item of deliveryItems.filter(i => !!i.file)) {
+        const url = await uploadToStorage(item.file!, 'delivery-photos')
+        newDeliveryUrls.push(url)
+      }
+      const finalDeliveryUrls = [...keptDeliveryUrls, ...newDeliveryUrls]
+
+      // ── 영수증 사진 ──
+      // 삭제된 기존 URL을 Storage에서 제거
+      const originalReceiptUrls = ((request.receipt_photo_urls as ReceiptPhoto[]) || []).map(r => r.url)
+      const keptReceiptUrls = receiptPhotos.filter(rp => rp.url && !rp.file).map(rp => rp.url!)
+      const removedReceiptUrls = originalReceiptUrls.filter(u => !keptReceiptUrls.includes(u))
+      await Promise.all(removedReceiptUrls.map(u => deleteFromStorage(u, 'receipt-photos')))
+
+      // 새 파일 업로드 + 기존 URL 유지
+      const finalReceiptUrls: ReceiptPhoto[] = []
       for (const rp of receiptPhotos) {
         if (rp.file) {
           const url = await uploadToStorage(rp.file, 'receipt-photos')
-          newReceiptUrls.push({ label: rp.label, url })
+          finalReceiptUrls.push({ label: rp.label, url })
         } else if (rp.url) {
-          newReceiptUrls.push({ label: rp.label, url: rp.url })
+          finalReceiptUrls.push({ label: rp.label, url: rp.url })
         }
       }
 
@@ -206,6 +236,8 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ids: [request.id],
+          item_name: editItemName || null,
+          spec: editSpec || null,
           vendor: vendorInput || null,
           unit_price: unitPrice ? parseInt(unitPrice) : null,
           purchase_quantity: purchaseQty ? parseInt(purchaseQty) : null,
@@ -213,21 +245,21 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           shipping_fee: shippingFee ? parseInt(shippingFee) : null,
           purchase_date: purchaseDate || null,
           memo: memo || null,
-          delivery_photo_urls: deliveryUrls,
-          receipt_photo_urls: newReceiptUrls,
+          delivery_photo_urls: finalDeliveryUrls,
+          receipt_photo_urls: finalReceiptUrls,
         }),
       })
       const { ok, data } = await safeJson(res)
       if (!ok) throw new Error(data.error || '저장 실패')
 
-      // 업로드 완료 후 로컬 파일 state 초기화 (중복 업로드 방지)
-      setDeliveryPhotos([])
-      setDeliveryPreviews(data.data[0].delivery_photo_urls || [])
+      // 업로드 완료 후 로컬 state를 저장된 결과로 동기화 (중복 업로드 방지)
+      setDeliveryItems((data.data[0].delivery_photo_urls || []).map((u: string) => ({ url: u })))
       setReceiptPhotos(
         (data.data[0].receipt_photo_urls as ReceiptPhoto[] || []).length > 0
           ? (data.data[0].receipt_photo_urls as ReceiptPhoto[]).map((r: ReceiptPhoto) => ({ label: r.label, url: r.url }))
           : receiptPhotos.map(rp => ({ label: rp.label, url: rp.url }))
       )
+      setEditingField(null)
 
       onUpdate(data.data[0])
       setSaveStatus('saved')
@@ -249,11 +281,11 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       let receiptUrls: ReceiptPhoto[] = (request.receipt_photo_urls as ReceiptPhoto[]) || []
 
       if (nextStatus === 'settled') {
-        // 납품 사진: 브라우저 → Supabase Storage 직접 업로드
-        if (deliveryPhotos.length > 0) {
-          const newUrls = await uploadManyToStorage(deliveryPhotos, 'delivery-photos')
-          deliveryUrls = [...(request.delivery_photo_urls || []), ...newUrls]
-        }
+        // 납품 사진: 기존 유지분 + 새 파일 업로드
+        const keptUrls = deliveryItems.filter(i => !i.file).map(i => i.url)
+        const newFiles = deliveryItems.filter(i => !!i.file).map(i => i.file!)
+        const newUrls = newFiles.length > 0 ? await uploadManyToStorage(newFiles, 'delivery-photos') : []
+        deliveryUrls = [...keptUrls, ...newUrls]
 
         // 영수증 사진: 파일이 있는 항목만 직접 업로드, 기존 URL은 그대로 유지
         const newReceiptUrls: ReceiptPhoto[] = []
@@ -357,11 +389,58 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
         <div><span className="text-gray-500">요청자</span><br /><strong>{request.requester_name}</strong></div>
         <div><span className="text-gray-500">접수일</span><br /><strong>{request.created_at.slice(0, 10)}</strong></div>
-        <div><span className="text-gray-500">물품명</span><br /><strong>{request.item_name}</strong></div>
+        {/* 물품명 — 인라인 편집 */}
+        <div className="col-span-2">
+          <div className="flex items-start gap-1">
+            <div className="flex-1">
+              <span className="text-gray-500 text-sm">물품명</span><br />
+              {editingField === 'item_name' ? (
+                <input
+                  autoFocus
+                  value={editItemName}
+                  onChange={e => setEditItemName(e.target.value)}
+                  onBlur={() => setEditingField(null)}
+                  className="w-full border border-blue-400 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 mt-0.5"
+                />
+              ) : (
+                <strong>{editItemName}</strong>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditingField('item_name')}
+              className="text-gray-300 hover:text-blue-500 text-sm mt-5 leading-none transition"
+              title="물품명 편집"
+            >✏️</button>
+          </div>
+        </div>
         <div><span className="text-gray-500">수량</span><br /><strong>{request.quantity} {request.unit}</strong></div>
-        {request.spec && (
-          <div className="col-span-2"><span className="text-gray-500">규격</span><br /><strong>{request.spec}</strong></div>
-        )}
+        {/* 규격 — 인라인 편집 */}
+        <div className="col-span-2">
+          <div className="flex items-start gap-1">
+            <div className="flex-1">
+              <span className="text-gray-500 text-sm">규격</span><br />
+              {editingField === 'spec' ? (
+                <input
+                  autoFocus
+                  value={editSpec}
+                  onChange={e => setEditSpec(e.target.value)}
+                  onBlur={() => setEditingField(null)}
+                  placeholder="규격 입력"
+                  className="w-full border border-blue-400 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 mt-0.5"
+                />
+              ) : (
+                <strong>{editSpec || <span className="text-gray-400 font-normal text-xs">미입력</span>}</strong>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditingField('spec')}
+              className="text-gray-300 hover:text-blue-500 text-sm mt-5 leading-none transition"
+              title="규격 편집"
+            >✏️</button>
+          </div>
+        </div>
         <div className="col-span-2"><span className="text-gray-500">용도/사유</span><br /><strong>{request.purpose}</strong></div>
 
         {/* 구입 정보 — 구입완료·정산완료 상태에서만 표시 */}
@@ -581,20 +660,17 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
                   </p>
                 </div>
                 {/* 슬롯 그리드 */}
-                {deliveryPreviews.length > 0 && (
+                {deliveryItems.length > 0 && (
                   <div className="grid grid-cols-6 gap-1 mt-2">
-                    {Array.from({ length: Math.max(6, deliveryPreviews.length) }).map((_, i) => (
-                      <div
-                        key={i}
-                        className={`aspect-square rounded border overflow-hidden ${
-                          deliveryPreviews[i] ? '' : 'border-dashed border-gray-200'
-                        }`}
-                      >
-                        {deliveryPreviews[i] ? (
-                          <img src={deliveryPreviews[i]} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-200 text-xs">—</div>
-                        )}
+                    {deliveryItems.map((item, i) => (
+                      <div key={i} className="relative aspect-square rounded border overflow-hidden group">
+                        <img src={item.url} alt="" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setDeliveryItems(prev => prev.filter((_, idx) => idx !== i))}
+                          className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/50 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition hover:bg-red-500"
+                          title="사진 삭제"
+                        >×</button>
                       </div>
                     ))}
                   </div>
@@ -627,6 +703,13 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
                       }}
                       onRemove={() => {
                         setReceiptPhotos(prev => prev.filter((_, idx) => idx !== i))
+                      }}
+                      onRemovePhoto={() => {
+                        setReceiptPhotos(prev => {
+                          const updated = [...prev]
+                          updated[i] = { label: updated[i].label }  // url·file 제거
+                          return updated
+                        })
                       }}
                     />
                   ))}

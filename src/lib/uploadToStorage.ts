@@ -35,3 +35,16 @@ export async function uploadManyToStorage(
   }
   return urls
 }
+
+/** Public URL → Storage 경로를 추출해 파일 삭제 */
+export async function deleteFromStorage(
+  publicUrl: string,
+  bucket: string
+): Promise<void> {
+  const supabase = createClient()
+  const marker = `/storage/v1/object/public/${bucket}/`
+  const idx = publicUrl.indexOf(marker)
+  if (idx === -1) return  // 버킷 외부 URL은 무시
+  const filePath = decodeURIComponent(publicUrl.slice(idx + marker.length).split('?')[0])
+  await supabase.storage.from(bucket).remove([filePath])
+}
