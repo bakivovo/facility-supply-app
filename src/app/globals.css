@@ -1,6 +1,25 @@
 @import "tailwindcss";
 
+/* ── Pretendard 폰트 등록 ─────────────────────────── */
+@font-face {
+  font-family: 'Pretendard';
+  src: url('/brand/Pretendard-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── DMU 브랜드 색상 토큰 (Tailwind v4 @theme) ──── */
+@theme {
+  --color-dmu-blue:      #0A67A6;
+  --color-dmu-yellow:    #EDE900;
+  --color-dmu-coolgray:  #C1C1C1;
+  --color-dmu-darkgray:  #737373;
+  --color-dmu-black:     #000000;
+}
+
+/* ── 전역 기본 스타일 ─────────────────────────────── */
 body {
-  font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', Arial, sans-serif;
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', '맑은 고딕', Arial, sans-serif;
   color: #1a1a1a;
 }

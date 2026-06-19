@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState, useEffect, useRef } from 'react'
 import { UNITS, URGENCY_LABEL, STATUS_LABEL, STATUS_COLOR } from '@/types'
 import { uploadManyToStorage } from '@/lib/uploadToStorage'
@@ -181,9 +182,23 @@ export default function RequestPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 헤더 */}
-      <header className="bg-blue-700 text-white px-6 py-5 shadow shrink-0">
-        <p className="text-xs opacity-80 mb-1">동양미래대학교 사무처 시설관리팀</p>
-        <h1 className="text-xl font-bold leading-snug">물품 요청서</h1>
+      <header style={{ backgroundColor: '#0A67A6' }} className="text-white px-6 py-4 shadow shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="bg-white rounded-md px-2 py-1 shrink-0">
+            <Image
+              src="/brand/워드마크.png.png"
+              alt="동양미래대학교"
+              width={76}
+              height={26}
+              className="object-contain"
+              priority
+            />
+          </div>
+          <div>
+            <p className="text-xs opacity-70">사무처 시설관리팀</p>
+            <h1 className="text-base font-bold leading-tight">물품 요청서</h1>
+          </div>
+        </div>
       </header>
 
       {/* 2분할 본문 */}

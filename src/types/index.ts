@@ -56,11 +56,11 @@ export const STATUS_LABEL: Record<Status, string> = {
 }
 
 export const STATUS_COLOR: Record<Status, string> = {
-  new: 'bg-green-100 text-green-800',
-  reviewing: 'bg-yellow-100 text-yellow-800',
-  purchased: 'bg-blue-100 text-blue-800',
-  settled: 'bg-gray-100 text-gray-800',
-  rejected: 'bg-red-100 text-red-800',
+  new:       'bg-[#0A67A6]/10 text-[#0A67A6]',          // DMU Blue (연)
+  reviewing: 'bg-[#EDE900]/40 text-[#5a5600]',          // DMU Yellow (연)
+  purchased: 'bg-[#0A67A6]/20 text-[#0A67A6]',          // DMU Blue (중)
+  settled:   'bg-[#EDE900] text-[#3a3800]',              // DMU Yellow (진)
+  rejected:  'bg-red-100 text-red-700',                  // 반려: 빨간색 유지
 }
 
 export const URGENCY_LABEL: Record<Urgency, string> = {

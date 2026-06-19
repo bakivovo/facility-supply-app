@@ -319,7 +319,7 @@ export default function AdminPage() {
                 {[
                   { label: '신규 요청',  value: dynamicStats.new,                                        color: 'bg-green-50  border-green-200  text-green-700'  },
                   { label: '처리 중',    value: dynamicStats.reviewing + dynamicStats.purchased,          color: 'bg-orange-50 border-orange-200 text-orange-700' },
-                  { label: '구입 완료',  value: dynamicStats.purchased,                                  color: 'bg-blue-50   border-blue-200   text-blue-700'   },
+                  { label: '구입 완료',  value: dynamicStats.purchased,                                  color: 'bg-blue-50   border-blue-200   text-[#0A67A6]'   },
                   { label: '구매금액',   value: dynamicStats.settled_purchase.toLocaleString() + '원',   color: 'bg-purple-50 border-purple-200 text-purple-700' },
                   { label: '배송비',     value: dynamicStats.settled_shipping.toLocaleString() + '원',   color: 'bg-pink-50   border-pink-200   text-pink-700'   },
                   { label: '합계',       value: dynamicStats.settled_total.toLocaleString()    + '원',   color: 'bg-gray-50   border-gray-200   text-gray-700'   },
@@ -389,7 +389,7 @@ export default function AdminPage() {
                 key={s}
                 onClick={() => setStatusFilter(s)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                  statusFilter === s ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'
+                  statusFilter === s ? 'bg-[#0A67A6] text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'
                 }`}
               >
                 {s === 'all' ? '전체' : STATUS_LABEL[s as Status]}
@@ -402,13 +402,13 @@ export default function AdminPage() {
           {/* 일괄 처리 바 */}
           {selectedIds.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mt-3 flex items-center gap-3 flex-wrap">
-              <span className="text-sm font-semibold text-blue-700">{selectedIds.length}건 선택됨</span>
+              <span className="text-sm font-semibold text-[#0A67A6]">{selectedIds.length}건 선택됨</span>
               {(['reviewing', 'purchased', 'settled'] as Status[]).map(s => (
                 <button
                   key={s}
                   onClick={() => handleBulkStatus(s)}
                   disabled={bulkLoading}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition disabled:opacity-60"
+                  className="px-3 py-1.5 bg-[#0A67A6] text-white rounded-lg text-sm hover:brightness-90 transition disabled:opacity-60"
                 >
                   {STATUS_LABEL[s]}으로 변경
                 </button>
@@ -416,7 +416,7 @@ export default function AdminPage() {
               <button
                 onClick={handleBulkExcel}
                 disabled={bulkExcelLoading}
-                className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition disabled:opacity-60 ml-auto"
+                className="px-3 py-1.5 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60 ml-auto"
               >
                 {bulkExcelLoading ? '생성 중...' : `📥 선택 항목 엑셀 다운로드`}
               </button>
@@ -552,14 +552,14 @@ export default function AdminPage() {
               <button
                 onClick={handleMonthSearch}
                 disabled={monthlyLoading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+                className="px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90 disabled:opacity-60"
               >
                 {monthlyLoading ? '조회 중...' : '조회'}
               </button>
               <button
                 onClick={handleMonthlyExcel}
                 disabled={excelLoading}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 disabled:opacity-60"
+                className="px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90 disabled:opacity-60"
               >
                 {excelLoading ? '생성 중...' : '📥 엑셀 내보내기'}
               </button>
@@ -649,7 +649,7 @@ export default function AdminPage() {
               <input type="password" placeholder="새 비밀번호 확인" value={pwForm.confirm}
                 onChange={e => setPwForm(p => ({ ...p, confirm: e.target.value }))}
                 className="w-full border rounded-lg px-3 py-2 text-sm" />
-              <button onClick={handleChangePw} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">변경</button>
+              <button onClick={handleChangePw} className="px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90">변경</button>
               {pwMsg && <p className="text-sm text-blue-600">{pwMsg}</p>}
             </div>
           </div>
@@ -668,7 +668,7 @@ export default function AdminPage() {
             <div className="flex gap-2">
               <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="카테고리명" className="flex-1 border rounded-lg px-3 py-2 text-sm" />
               <input value={newCatCode} onChange={e => setNewCatCode(e.target.value)} placeholder="코드" className="w-24 border rounded-lg px-3 py-2 text-sm" />
-              <button onClick={handleAddCategory} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">추가</button>
+              <button onClick={handleAddCategory} className="px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90">추가</button>
             </div>
           </div>
 
@@ -685,7 +685,7 @@ export default function AdminPage() {
             </div>
             <div className="flex gap-2">
               <input value={newVendorName} onChange={e => setNewVendorName(e.target.value)} placeholder="거래처명" className="flex-1 border rounded-lg px-3 py-2 text-sm" />
-              <button onClick={handleAddVendor} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">추가</button>
+              <button onClick={handleAddVendor} className="px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90">추가</button>
             </div>
           </div>
 
@@ -699,14 +699,14 @@ export default function AdminPage() {
               placeholder="인수인계 시 전달할 내용을 자유롭게 작성하세요"
               className="w-full border border-gray-300 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <button onClick={handleSaveMemo} className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700">저장</button>
+            <button onClick={handleSaveMemo} className="mt-3 px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90">저장</button>
           </div>
 
           {/* 전체 이력 내보내기 */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-base font-bold text-gray-800 mb-2">📤 전체 요청 이력 내보내기</h2>
             <p className="text-sm text-gray-500 mb-4">전체 요청 이력을 엑셀 파일로 다운로드합니다.</p>
-            <button onClick={handleAllExcel} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700">
+            <button onClick={handleAllExcel} className="px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90">
               📥 전체 이력 엑셀 다운로드
             </button>
           </div>
