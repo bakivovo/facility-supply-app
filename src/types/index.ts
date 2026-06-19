@@ -56,7 +56,7 @@ export const STATUS_LABEL: Record<Status, string> = {
 }
 
 export const STATUS_COLOR: Record<Status, string> = {
-  new:       'bg-[#0A67A6]/10 text-[#0A67A6]',          // DMU Blue (연)
+  new:       'bg-green-100 text-green-700',               // 신규: 초록 계열
   reviewing: 'bg-[#EDE900]/40 text-[#5a5600]',          // DMU Yellow (연)
   purchased: 'bg-[#0A67A6]/20 text-[#0A67A6]',          // DMU Blue (중)
   settled:   'bg-[#EDE900] text-[#3a3800]',              // DMU Yellow (진)

@@ -29,7 +29,7 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
 
           {/* 워드마크 + 타이틀 */}
           <div className="flex items-center gap-3">
-            <div className="bg-white rounded-md px-2 py-1 shrink-0">
+            <div className="bg-white rounded-md px-2 py-1 shrink-0 flex items-center justify-center">
               <Image
                 src="/brand/워드마크.png.png"
                 alt="동양미래대학교"
@@ -40,8 +40,8 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
               />
             </div>
             <div>
-              <p className="text-xs opacity-70">사무처 시설관리팀</p>
-              <h1 className="text-sm font-bold leading-tight">건축물관리용품 관리 시스템</h1>
+              <p className="text-base opacity-70">사무처 시설관리팀</p>
+              <h1 className="text-xl font-bold leading-tight">건축물관리용품 관리 시스템</h1>
             </div>
           </div>
 
