@@ -182,21 +182,23 @@ export default function RequestPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 헤더 */}
-      <header style={{ backgroundColor: '#0A67A6' }} className="text-white px-6 py-4 shadow shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="bg-white rounded-md p-1.5 shrink-0 flex items-center justify-center w-[68px] h-[68px]">
-            <Image
-              src="/brand/wordmark.png"
-              alt="동양미래대학교"
-              width={68}
-              height={68}
-              className="object-contain w-full h-full"
-              priority
-            />
-          </div>
-          <div>
-            <p className="text-xs opacity-70">사무처 시설관리팀</p>
-            <h1 className="text-base font-bold leading-tight">물품 요청서</h1>
+      <header style={{ backgroundColor: '#0A67A6' }} className="text-white shrink-0">
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-white rounded-md px-2 py-1 shrink-0 self-stretch flex items-center justify-center">
+              <Image
+                src="/brand/wordmark.png"
+                alt="동양미래대학교"
+                width={48}
+                height={48}
+                className="object-contain h-full w-auto"
+                priority
+              />
+            </div>
+            <div>
+              <p className="text-base opacity-70">사무처 시설관리팀</p>
+              <h1 className="text-xl font-bold leading-tight">물품 요청서</h1>
+            </div>
           </div>
         </div>
       </header>
