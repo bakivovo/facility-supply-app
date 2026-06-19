@@ -49,6 +49,12 @@ export default function AdminPage() {
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
   const [pwMsg, setPwMsg] = useState('')
 
+  // 사진 정리
+  const [photoDownloading, setPhotoDownloading] = useState(false)
+  const [photoDownloadDone, setPhotoDownloadDone] = useState(false)
+  const [photoDeleting, setPhotoDeleting] = useState(false)
+  const [showPhotoDeleteModal, setShowPhotoDeleteModal] = useState(false)
+
   // 세션 체크 — 미로그인 시 로그인 페이지로 이동
   useEffect(() => {
     const supabase = createClient()
@@ -247,6 +253,100 @@ export default function AdminPage() {
     if (error) { setPwMsg('변경 실패: ' + error.message); return }
     setPwMsg('비밀번호가 변경되었습니다.')
     setPwForm({ current: '', next: '', confirm: '' })
+  }
+
+  // 사진 정리 핸들러
+  const handlePhotoDownload = async () => {
+    setPhotoDownloading(true)
+    try {
+      const JSZip = (await import('jszip')).default
+      const zip = new JSZip()
+
+      const now = new Date()
+      const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, 1)
+      const items = requests.filter(r => {
+        if (r.status !== 'settled') return false
+        if (!r.receipt_number) return false
+        const hasPhotos = (r.delivery_photo_urls?.length ?? 0) > 0 || (r.receipt_photo_urls?.length ?? 0) > 0
+        if (!hasPhotos) return false
+        const parts = r.receipt_number.split('-')
+        if (parts.length < 2) return false
+        const yy = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
+        return new Date(2000 + yy, mm - 1, 1) < cutoff
+      })
+
+      for (const req of items) {
+        const folder = zip.folder(req.receipt_number!)!
+        for (let i = 0; i < (req.delivery_photo_urls ?? []).length; i++) {
+          try {
+            const url = req.delivery_photo_urls![i]
+            const blob = await fetch(url).then(r => r.blob())
+            const ext = url.split('.').pop()?.split('?')[0] || 'jpg'
+            folder.file(`납품사진_${i + 1}.${ext}`, blob)
+          } catch { /* 개별 실패 건 skip */ }
+        }
+        for (let i = 0; i < (req.receipt_photo_urls ?? []).length; i++) {
+          try {
+            const photo = req.receipt_photo_urls![i]
+            const url = photo.url
+            const blob = await fetch(url).then(r => r.blob())
+            const ext = url.split('.').pop()?.split('?')[0] || 'jpg'
+            folder.file(`영수증_${photo.label || i + 1}.${ext}`, blob)
+          } catch { /* 개별 실패 건 skip */ }
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' })
+      const cutoffYY = String(cutoff.getFullYear()).slice(2)
+      const cutoffMM = String(cutoff.getMonth() + 1).padStart(2, '0')
+      const today = new Date()
+      const todayStr = `${String(today.getFullYear()).slice(2)}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(content)
+      a.download = `사진아카이브_${cutoffYY}${cutoffMM}이전_${todayStr}.zip`
+      a.click()
+      URL.revokeObjectURL(a.href)
+      setPhotoDownloadDone(true)
+    } catch (err: any) {
+      alert('다운로드 오류: ' + err.message)
+    } finally {
+      setPhotoDownloading(false)
+    }
+  }
+
+  const handlePhotoDelete = async () => {
+    setShowPhotoDeleteModal(false)
+    setPhotoDeleting(true)
+    try {
+      const now = new Date()
+      const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, 1)
+      const ids = requests
+        .filter(r => {
+          if (r.status !== 'settled' || !r.receipt_number) return false
+          const hasPhotos = (r.delivery_photo_urls?.length ?? 0) > 0 || (r.receipt_photo_urls?.length ?? 0) > 0
+          if (!hasPhotos) return false
+          const parts = r.receipt_number.split('-')
+          if (parts.length < 2) return false
+          const yy = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
+          return new Date(2000 + yy, mm - 1, 1) < cutoff
+        })
+        .map(r => r.id)
+
+      const res = await fetch('/api/admin/photos/cleanup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '삭제 실패')
+      alert(`삭제 완료 (파일 ${data.deleted}개)`)
+      setPhotoDownloadDone(false)
+      await fetchAll()
+    } catch (err: any) {
+      alert('삭제 오류: ' + err.message)
+    } finally {
+      setPhotoDeleting(false)
+    }
   }
 
   // 카테고리별 금액 집계
@@ -702,6 +802,68 @@ export default function AdminPage() {
             <button onClick={handleSaveMemo} className="mt-3 px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90">저장</button>
           </div>
 
+          {/* 오래된 사진 정리 */}
+          {(() => {
+            const now = new Date()
+            const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, 1)
+            const cutoffYY = String(cutoff.getFullYear()).slice(2)
+            const cutoffMM = String(cutoff.getMonth() + 1).padStart(2, '0')
+            const items = requests.filter(r => {
+              if (r.status !== 'settled' || !r.receipt_number) return false
+              const hasPhotos = (r.delivery_photo_urls?.length ?? 0) > 0 || (r.receipt_photo_urls?.length ?? 0) > 0
+              if (!hasPhotos) return false
+              const parts = r.receipt_number.split('-')
+              if (parts.length < 2) return false
+              const yy = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
+              return new Date(2000 + yy, mm - 1, 1) < cutoff
+            })
+            const photoCount = items.reduce(
+              (s, r) => s + (r.delivery_photo_urls?.length ?? 0) + (r.receipt_photo_urls?.length ?? 0), 0
+            )
+            const estMB = Math.round(photoCount * 0.5)
+            return (
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h2 className="text-base font-bold text-gray-800 mb-1">🗂️ 오래된 사진 정리</h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  3개월 이전({cutoffYY}{cutoffMM} 이전) 정산완료 항목의 납품·영수증 사진을 일괄 보관 후 삭제합니다.
+                </p>
+
+                {items.length === 0 ? (
+                  <p className="text-sm text-gray-400">정리 대상 항목이 없습니다.</p>
+                ) : (
+                  <>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-4">
+                      <span className="text-sm font-semibold text-amber-800">대상 {items.length}건</span>
+                      <span className="text-sm text-amber-600 ml-2">· 사진 {photoCount}장 · 약 {estMB}MB</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={handlePhotoDownload}
+                        disabled={photoDownloading}
+                        className="px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90 disabled:opacity-60"
+                      >
+                        {photoDownloading ? '다운로드 중...' : '📥 사진 다운로드 (zip)'}
+                      </button>
+
+                      <button
+                        onClick={() => setShowPhotoDeleteModal(true)}
+                        disabled={!photoDownloadDone || photoDeleting}
+                        className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-40 transition"
+                      >
+                        {photoDeleting ? '삭제 중...' : 'Supabase에서 삭제'}
+                      </button>
+
+                      {photoDownloadDone && !photoDeleting && (
+                        <span className="text-xs text-green-600 font-medium">✓ 다운로드 완료 — 삭제 버튼 활성화됨</span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })()}
+
           {/* 전체 이력 내보내기 */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h2 className="text-base font-bold text-gray-800 mb-2">📤 전체 요청 이력 내보내기</h2>
@@ -709,6 +871,33 @@ export default function AdminPage() {
             <button onClick={handleAllExcel} className="px-4 py-2 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90">
               📥 전체 이력 엑셀 다운로드
             </button>
+          </div>
+        </div>
+      )}
+      {/* 사진 삭제 확인 모달 */}
+      {showPhotoDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full">
+            <h3 className="text-base font-bold text-gray-900 mb-2">⚠️ 사진 삭제 확인</h3>
+            <p className="text-sm text-gray-600 mb-1">정말 삭제하시겠습니까?</p>
+            <p className="text-sm font-semibold text-red-600 mb-5">
+              다운로드한 zip 파일을 반드시 보관하세요.<br />
+              삭제된 사진은 복구할 수 없습니다.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPhotoDeleteModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handlePhotoDelete}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700"
+              >
+                삭제 확인
+              </button>
+            </div>
           </div>
         </div>
       )}
