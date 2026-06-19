@@ -492,6 +492,13 @@ export default function RequestPage() {
                         <span>요청수량 {r.quantity}{r.unit}</span>
                       </div>
 
+                      {/* 용도 */}
+                      {r.purpose && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          <span className="text-gray-400">용도:</span> {r.purpose}
+                        </p>
+                      )}
+
                       {/* 구입 정보 — 구입완료·정산완료만 표시 */}
                       {isPurchased && (
                         <div className="mt-2.5 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">

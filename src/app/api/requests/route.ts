@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
     const q = query.trim()
     const { data, error } = await supabase
       .from('requests')
-      .select('receipt_number, status, reject_reason, item_name, spec, quantity, unit, purchase_quantity, unit_price, purchase_date, amount, vendor, created_at')
+      .select('receipt_number, status, reject_reason, item_name, spec, quantity, unit, purchase_quantity, unit_price, purchase_date, amount, vendor, purpose, created_at')
       .or(`requester_name.ilike.%${q}%,item_name.ilike.%${q}%,spec.ilike.%${q}%`)
       .order('created_at', { ascending: false })
 
