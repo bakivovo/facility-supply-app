@@ -31,7 +31,7 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
           <div className="flex items-center gap-3">
             <div className="bg-white rounded-md p-1.5 shrink-0 flex items-center justify-center w-[76px] h-[76px]">
               <Image
-                src="/brand/워드마크_png.png"
+                src="/brand/wordmark.png"
                 alt="동양미래대학교"
                 width={76}
                 height={76}
