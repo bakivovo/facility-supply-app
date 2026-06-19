@@ -184,13 +184,13 @@ export default function RequestPage() {
       {/* 헤더 */}
       <header style={{ backgroundColor: '#0A67A6' }} className="text-white px-6 py-4 shadow shrink-0">
         <div className="flex items-center gap-3">
-          <div className="bg-white rounded-md px-2 py-1 shrink-0">
+          <div className="bg-white rounded-md p-1.5 shrink-0 flex items-center justify-center w-[68px] h-[68px]">
             <Image
-              src="/brand/워드마크.png.png"
+              src="/brand/워드마크_png.png"
               alt="동양미래대학교"
-              width={76}
-              height={26}
-              className="object-contain"
+              width={68}
+              height={68}
+              className="object-contain w-full h-full"
               priority
             />
           </div>
