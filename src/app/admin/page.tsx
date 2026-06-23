@@ -8,6 +8,32 @@ import RequestDetailPanel from '@/components/RequestDetailPanel'
 import type { Request, Status } from '@/types'
 import { STATUS_LABEL, STATUS_COLOR, URGENCY_LABEL, URGENCY_COLOR } from '@/types'
 
+// 3개월 이전 정산완료 항목 중 사진이 남아있는 건 반환
+function getOldPhotoItems(requests: Request[]): Request[] {
+  const cutoff = new Date()
+  cutoff.setMonth(cutoff.getMonth() - 3)
+  cutoff.setDate(1)
+  cutoff.setHours(0, 0, 0, 0)
+  return requests.filter(r => {
+    if (r.status !== 'settled' || !r.receipt_number) return false
+    if (!(r.delivery_photo_urls?.length) && !(r.receipt_photo_urls?.length)) return false
+    const parts = r.receipt_number.split('-')
+    if (parts.length < 2) return false
+    const yy = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
+    return new Date(2000 + yy, mm - 1, 1) < cutoff
+  })
+}
+
+// Blob을 파일로 다운로드
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function AdminPage() {
   const router = useRouter()
   const [authChecked, setAuthChecked] = useState(false)
@@ -135,19 +161,10 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: selectedIds }),
       })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || '엑셀 생성 실패')
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
+      if (!res.ok) throw new Error((await res.json()).error || '엑셀 생성 실패')
       const now = new Date()
       const yyMM = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}`
-      a.download = `${yyMM}_${selectedIds.length}건_정산내역.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
+      downloadBlob(await res.blob(), `${yyMM}_${selectedIds.length}건_정산내역.xlsx`)
     } catch (err: any) {
       alert('오류: ' + err.message)
     } finally {
@@ -166,27 +183,15 @@ export default function AdminPage() {
     try {
       const res = await fetch(`/api/excel/monthly?month=${monthInput}`)
       if (!res.ok) throw new Error('엑셀 생성 실패')
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
       const [y, m] = monthInput.split('-')
-      a.download = `${y.slice(2)}${m}_정산현황.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
+      downloadBlob(await res.blob(), `${y.slice(2)}${m}_정산현황.xlsx`)
     } catch (err: any) { alert(err.message) }
     setExcelLoading(false)
   }
 
   const handleAllExcel = async () => {
     const res = await fetch('/api/excel/all')
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `전체이력_${new Date().toISOString().slice(0,10)}.xlsx`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(await res.blob(), `전체이력_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   const handleMonthSearch = async () => {
@@ -262,18 +267,10 @@ export default function AdminPage() {
       const JSZip = (await import('jszip')).default
       const zip = new JSZip()
 
-      const now = new Date()
-      const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, 1)
-      const items = requests.filter(r => {
-        if (r.status !== 'settled') return false
-        if (!r.receipt_number) return false
-        const hasPhotos = (r.delivery_photo_urls?.length ?? 0) > 0 || (r.receipt_photo_urls?.length ?? 0) > 0
-        if (!hasPhotos) return false
-        const parts = r.receipt_number.split('-')
-        if (parts.length < 2) return false
-        const yy = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
-        return new Date(2000 + yy, mm - 1, 1) < cutoff
-      })
+      const cutoff = new Date()
+      cutoff.setMonth(cutoff.getMonth() - 3)
+      cutoff.setDate(1)
+      const items = getOldPhotoItems(requests)
 
       for (const req of items) {
         const folder = zip.folder(req.receipt_number!)!
@@ -301,11 +298,7 @@ export default function AdminPage() {
       const cutoffMM = String(cutoff.getMonth() + 1).padStart(2, '0')
       const today = new Date()
       const todayStr = `${String(today.getFullYear()).slice(2)}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(content)
-      a.download = `사진아카이브_${cutoffYY}${cutoffMM}이전_${todayStr}.zip`
-      a.click()
-      URL.revokeObjectURL(a.href)
+      downloadBlob(content, `사진아카이브_${cutoffYY}${cutoffMM}이전_${todayStr}.zip`)
       setPhotoDownloadDone(true)
     } catch (err: any) {
       alert('다운로드 오류: ' + err.message)
@@ -318,19 +311,7 @@ export default function AdminPage() {
     setShowPhotoDeleteModal(false)
     setPhotoDeleting(true)
     try {
-      const now = new Date()
-      const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, 1)
-      const ids = requests
-        .filter(r => {
-          if (r.status !== 'settled' || !r.receipt_number) return false
-          const hasPhotos = (r.delivery_photo_urls?.length ?? 0) > 0 || (r.receipt_photo_urls?.length ?? 0) > 0
-          if (!hasPhotos) return false
-          const parts = r.receipt_number.split('-')
-          if (parts.length < 2) return false
-          const yy = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
-          return new Date(2000 + yy, mm - 1, 1) < cutoff
-        })
-        .map(r => r.id)
+      const ids = getOldPhotoItems(requests).map(r => r.id)
 
       const res = await fetch('/api/admin/photos/cleanup', {
         method: 'POST',
@@ -804,19 +785,12 @@ export default function AdminPage() {
 
           {/* 오래된 사진 정리 */}
           {(() => {
-            const now = new Date()
-            const cutoff = new Date(now.getFullYear(), now.getMonth() - 3, 1)
+            const cutoff = new Date()
+            cutoff.setMonth(cutoff.getMonth() - 3)
+            cutoff.setDate(1)
             const cutoffYY = String(cutoff.getFullYear()).slice(2)
             const cutoffMM = String(cutoff.getMonth() + 1).padStart(2, '0')
-            const items = requests.filter(r => {
-              if (r.status !== 'settled' || !r.receipt_number) return false
-              const hasPhotos = (r.delivery_photo_urls?.length ?? 0) > 0 || (r.receipt_photo_urls?.length ?? 0) > 0
-              if (!hasPhotos) return false
-              const parts = r.receipt_number.split('-')
-              if (parts.length < 2) return false
-              const yy = parseInt(parts[0], 10), mm = parseInt(parts[1], 10)
-              return new Date(2000 + yy, mm - 1, 1) < cutoff
-            })
+            const items = getOldPhotoItems(requests)
             const photoCount = items.reduce(
               (s, r) => s + (r.delivery_photo_urls?.length ?? 0) + (r.receipt_photo_urls?.length ?? 0), 0
             )

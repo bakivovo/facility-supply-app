@@ -1,12 +1,5 @@
+import { getSupabaseAdmin } from '@/lib/supabase/apiClient'
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
 
 function extractPath(publicUrl: string, bucket: string): string | null {
   const marker = `/storage/v1/object/public/${bucket}/`
@@ -16,7 +9,7 @@ function extractPath(publicUrl: string, bucket: string): string | null {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   const { ids } = await request.json()
 
   if (!ids?.length) return NextResponse.json({ error: 'ids 필요' }, { status: 400 })

@@ -2,15 +2,8 @@
 
 import Image from 'next/image'
 import { useState, useEffect, useRef } from 'react'
-import { UNITS, URGENCY_LABEL, STATUS_LABEL, STATUS_COLOR } from '@/types'
+import { UNITS, STATUS_LABEL, STATUS_COLOR, type Category } from '@/types'
 import { uploadManyToStorage } from '@/lib/uploadToStorage'
-
-interface Category {
-  id: string
-  name: string
-  code: string
-  display_order: number
-}
 
 export default function RequestPage() {
   const [categories, setCategories] = useState<Category[]>([])

@@ -1,15 +1,8 @@
+import { getSupabaseAdmin } from '@/lib/supabase/apiClient'
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
 
 export async function GET(request: NextRequest) {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   const { searchParams } = new URL(request.url)
   const status = searchParams.get('status')
 
@@ -37,7 +30,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const supabase = getSupabase()
+  const supabase = getSupabaseAdmin()
   const body = await request.json()
   const { ids, status, reject_reason, item_name, spec, vendor, unit_price, purchase_quantity, amount, shipping_fee, purchase_date, memo,
           delivery_photo_urls, receipt_photo_urls } = body

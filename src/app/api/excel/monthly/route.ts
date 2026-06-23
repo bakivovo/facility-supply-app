@@ -1,27 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { NextRequest } from 'next/server'
 import { buildSettlementWorkbook } from '@/lib/excelSettlement'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
-
-function makeDateStr(d: Date) {
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
-}
+import { getSupabaseAdmin } from '@/lib/supabase/apiClient'
+import { makeDateStr, xlsxResponse } from '@/lib/excelHelpers'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const month = searchParams.get('month')
-    if (!month) return NextResponse.json({ error: 'month 파라미터가 필요합니다.' }, { status: 400 })
+    if (!month) return Response.json({ error: 'month 파라미터가 필요합니다.' }, { status: 400 })
 
     const [year, mon] = month.split('-')
 
-    const supabase = getSupabase()
+    const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from('requests')
       .select('*')
@@ -30,7 +20,7 @@ export async function GET(request: NextRequest) {
       .eq('status', 'settled')
       .order('purchase_date', { ascending: true })
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) return Response.json({ error: error.message }, { status: 500 })
 
     const items   = data || []
     const dateStr = makeDateStr(new Date())
@@ -38,17 +28,10 @@ export async function GET(request: NextRequest) {
 
     const workbook = await buildSettlementWorkbook(items, title)
     const buffer   = await workbook.xlsx.writeBuffer()
-    const filename = encodeURIComponent(`${year.slice(2)}${mon}_정산현황.xlsx`)
 
-    return new NextResponse(buffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename*=UTF-8''${filename}`,
-      },
-    })
+    return xlsxResponse(buffer, `${year.slice(2)}${mon}_정산현황.xlsx`)
   } catch (err: any) {
     console.error('월별 정산 엑셀 오류:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    return Response.json({ error: err.message }, { status: 500 })
   }
 }

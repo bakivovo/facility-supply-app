@@ -12,6 +12,7 @@
  */
 
 import ExcelJS from 'exceljs'
+import type { Request } from '@/types'
 
 // ────────────────────────────────────────────────
 // 내부 헬퍼
@@ -40,8 +41,8 @@ function applyHeaderStyle(cell: ExcelJS.Cell) {
 // 메인 엑셀 빌더
 // ────────────────────────────────────────────────
 export async function buildSettlementWorkbook(
-  items: any[],
-  title: string,          // 1행에 표시될 제목 전체 문자열
+  items: Request[],
+  title: string,
 ): Promise<ExcelJS.Workbook> {
   const workbook = new ExcelJS.Workbook()
 
