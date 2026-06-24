@@ -182,16 +182,25 @@ export default function AdminPage() {
     setExcelLoading(true)
     try {
       const res = await fetch(`/api/excel/monthly?month=${monthInput}`)
-      if (!res.ok) throw new Error('엑셀 생성 실패')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `서버 오류 (${res.status})`)
+      }
       const [y, m] = monthInput.split('-')
       downloadBlob(await res.blob(), `${y.slice(2)}${m}_정산현황.xlsx`)
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { alert('엑셀 생성 오류: ' + err.message) }
     setExcelLoading(false)
   }
 
   const handleAllExcel = async () => {
-    const res = await fetch('/api/excel/all')
-    downloadBlob(await res.blob(), `전체이력_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    try {
+      const res = await fetch('/api/excel/all')
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `서버 오류 (${res.status})`)
+      }
+      downloadBlob(await res.blob(), `전체이력_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    } catch (err: any) { alert('엑셀 생성 오류: ' + err.message) }
   }
 
   const handleMonthSearch = async () => {

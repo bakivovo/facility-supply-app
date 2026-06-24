@@ -17,14 +17,21 @@ import type { Request } from '@/types'
 // ────────────────────────────────────────────────
 // 내부 헬퍼
 // ────────────────────────────────────────────────
+const SUPPORTED_IMG_EXTS = new Set(['jpeg', 'png', 'gif'])
+
 async function fetchImageBuffer(url: string): Promise<{ buffer: any; ext: string } | null> {
   try {
-    const res = await fetch(url)
+    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) })
     if (!res.ok) return null
+    // Content-Type이 image/* 인지 검증 — HTML 에러 페이지 차단
+    const ct = res.headers.get('content-type') || ''
+    if (!ct.startsWith('image/')) return null
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const buffer: any = Buffer.from(new Uint8Array(await res.arrayBuffer()))
+    if (buffer.length === 0) return null
     const rawExt = url.split('?')[0].split('.').pop()?.toLowerCase() || 'jpeg'
-    return { buffer, ext: rawExt === 'jpg' ? 'jpeg' : rawExt }
+    const ext = rawExt === 'jpg' ? 'jpeg' : SUPPORTED_IMG_EXTS.has(rawExt) ? rawExt : 'jpeg'
+    return { buffer, ext }
   } catch {
     return null
   }
@@ -183,15 +190,19 @@ export async function buildSettlementWorkbook(
 
           // 이미지
           if (photoUrl) {
-            const img = await fetchImageBuffer(photoUrl)
-            if (img) {
-              const imgId = workbook.addImage({ buffer: img.buffer, extension: img.ext as any })
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ;(ws2 as any).addImage(imgId, {
-                tl: { col, row: imgStart - 1 },
-                br: { col: col + 1, row: imgEnd },
-                editAs: 'oneCell',
-              })
+            try {
+              const img = await fetchImageBuffer(photoUrl)
+              if (img) {
+                const imgId = workbook.addImage({ buffer: img.buffer, extension: img.ext as any })
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                ;(ws2 as any).addImage(imgId, {
+                  tl: { col, row: imgStart - 1 },
+                  br: { col: col + 1, row: imgEnd },
+                  editAs: 'oneCell',
+                })
+              }
+            } catch {
+              // 이미지 삽입 실패 시 해당 칸만 건너뜀
             }
           }
         }
@@ -251,15 +262,19 @@ export async function buildSettlementWorkbook(
         }
 
         if (rp.url) {
-          const img = await fetchImageBuffer(rp.url)
-          if (img) {
-            const imgId = workbook.addImage({ buffer: img.buffer, extension: img.ext as any })
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ;(ws3 as any).addImage(imgId, {
-              tl: { col: 0, row: imgStart - 1 },
-              br: { col: 1, row: imgEnd },
-              editAs: 'oneCell',
-            })
+          try {
+            const img = await fetchImageBuffer(rp.url)
+            if (img) {
+              const imgId = workbook.addImage({ buffer: img.buffer, extension: img.ext as any })
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ;(ws3 as any).addImage(imgId, {
+                tl: { col: 0, row: imgStart - 1 },
+                br: { col: 1, row: imgEnd },
+                editAs: 'oneCell',
+              })
+            }
+          } catch {
+            // 이미지 삽입 실패 시 해당 칸만 건너뜀
           }
         }
 

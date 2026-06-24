@@ -11,18 +11,24 @@ export async function GET(request: NextRequest) {
 
     const [year, mon] = month.split('-')
 
+    // 다음 달 1일을 상한으로 사용 (월말 일수 차이 문제 회피)
+    const nextMonth = new Date(parseInt(year), parseInt(mon), 1)
+    const nextMonthStr = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`
+
     const supabase = getSupabaseAdmin()
     const { data, error } = await supabase
       .from('requests')
       .select('*')
       .gte('created_at', `${year}-${mon}-01`)
-      .lte('created_at', `${year}-${mon}-31`)
+      .lt('created_at', nextMonthStr)
       .eq('status', 'settled')
       .order('purchase_date', { ascending: true })
 
     if (error) return Response.json({ error: error.message }, { status: 500 })
 
     const items   = data || []
+    console.log(`[excel/monthly] ${month} 조회 건수: ${items.length}`)
+
     const dateStr = makeDateStr(new Date())
     const title   = `${year}년 ${parseInt(mon)}월 정산내역 (${items.length}건) — ${dateStr} / 동양미래대학교 사무처 시설관리팀`
 
@@ -31,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     return xlsxResponse(buffer, `${year.slice(2)}${mon}_정산현황.xlsx`)
   } catch (err: any) {
-    console.error('월별 정산 엑셀 오류:', err)
-    return Response.json({ error: err.message }, { status: 500 })
+    console.error('[excel/monthly] 엑셀 생성 오류:', err?.stack ?? err)
+    return Response.json({ error: err?.message ?? '알 수 없는 오류' }, { status: 500 })
   }
 }
