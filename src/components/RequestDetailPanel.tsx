@@ -176,6 +176,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
   const [excelLoading, setExcelLoading] = useState<'delivery' | 'receipt' | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [saveError, setSaveError] = useState('')
+  const [sheetResult, setSheetResult] = useState<'matched' | 'unmatched' | null>(null)
 
   const isSettling = request.status === 'purchased'
 
@@ -322,6 +323,26 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       const { ok, data } = await safeJson(res)
       if (!ok) throw new Error(data.error || '상태 변경 실패')
       onUpdate(data.data[0])
+
+      // 정산완료 처리 후 구글시트 관리대장 자동 입고 (실패해도 정산완료에 영향 없음)
+      if (nextStatus === 'settled') {
+        setSheetResult(null)
+        const updatedRequest = data.data[0]
+        fetch('/api/admin/sheet-webhook', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            receipt_number: updatedRequest.receipt_number,
+            item_name: updatedRequest.item_name,
+            spec: updatedRequest.spec,
+            purchase_quantity: updatedRequest.purchase_quantity ?? updatedRequest.quantity,
+            purchase_date: updatedRequest.purchase_date,
+          }),
+        })
+          .then(r => r.json())
+          .then(d => setSheetResult(d.matched ? 'matched' : 'unmatched'))
+          .catch(() => setSheetResult('unmatched'))
+      }
     } catch (err: any) {
       alert('오류: ' + err.message)
     } finally {
@@ -726,6 +747,22 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 구글시트 관리대장 연동 결과 */}
+      {sheetResult && (
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mb-2 ${
+          sheetResult === 'matched'
+            ? 'bg-green-50 text-green-700 border border-green-200'
+            : 'bg-amber-50 text-amber-700 border border-amber-200'
+        }`}>
+          <span>{sheetResult === 'matched' ? '✓' : '!'}</span>
+          <span>
+            {sheetResult === 'matched'
+              ? '관리대장 자동 입력됨'
+              : '관리대장 미매칭 — 입고대기 시트 확인 필요'}
+          </span>
         </div>
       )}
 
