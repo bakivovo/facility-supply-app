@@ -1,5 +1,5 @@
 export type Urgency = 'normal' | 'urgent' | 'relaxed'
-export type Status = 'new' | 'reviewing' | 'purchased' | 'settled' | 'rejected'
+export type Status = 'new' | 'reviewing' | 'ordered' | 'purchased' | 'settled' | 'rejected'
 
 export interface Request {
   id: string
@@ -50,6 +50,7 @@ export interface Vendor {
 export const STATUS_LABEL: Record<Status, string> = {
   new: '신규',
   reviewing: '검토중',
+  ordered: '주문완료',
   purchased: '구입완료',
   settled: '정산완료',
   rejected: '반려',
@@ -58,6 +59,7 @@ export const STATUS_LABEL: Record<Status, string> = {
 export const STATUS_COLOR: Record<Status, string> = {
   new:       'bg-green-100 text-green-700',               // 신규: 초록 계열
   reviewing: 'bg-orange-100 text-orange-700',             // 검토중: 주황 계열
+  ordered:   'bg-purple-100 text-purple-700',             // 주문완료: 보라 계열
   purchased: 'bg-[#0A67A6]/20 text-[#0A67A6]',          // DMU Blue (중)
   settled:   'bg-[#EDE900] text-[#3a3800]',              // DMU Yellow (진)
   rejected:  'bg-red-100 text-red-700',                  // 반려: 빨간색 유지
@@ -79,7 +81,8 @@ export const UNITS = ['개', '세트', '롤', 'm', 'kg', 'L', '박스', '기타'
 
 export const STATUS_FLOW: Record<Status, Status | null> = {
   new: 'reviewing',
-  reviewing: 'purchased',
+  reviewing: 'ordered',
+  ordered: 'purchased',
   purchased: 'settled',
   settled: null,
   rejected: null,
@@ -87,7 +90,8 @@ export const STATUS_FLOW: Record<Status, Status | null> = {
 
 export const NEXT_STATUS_LABEL: Record<Status, string> = {
   new: '검토중으로 변경',
-  reviewing: '구입완료로 변경',
+  reviewing: '주문완료로 변경',
+  ordered: '구입완료로 변경',
   purchased: '정산완료로 변경',
   settled: '',
   rejected: '',

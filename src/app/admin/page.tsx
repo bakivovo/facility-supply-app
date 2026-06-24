@@ -373,6 +373,7 @@ export default function AdminPage() {
   const dynamicStats = {
     new:              yearMonthFiltered.filter(r => r.status === 'new').length,
     reviewing:        yearMonthFiltered.filter(r => r.status === 'reviewing').length,
+    ordered:          yearMonthFiltered.filter(r => r.status === 'ordered').length,
     purchased:        yearMonthFiltered.filter(r => r.status === 'purchased').length,
     settled_purchase: settledItems.reduce((s, r) => s + (r.amount       || 0), 0),
     settled_shipping: settledItems.reduce((s, r) => s + (r.shipping_fee || 0), 0),
@@ -474,7 +475,7 @@ export default function AdminPage() {
             <div className="w-px h-5 bg-gray-300" />
 
             {/* 상태 필터 */}
-            {['all', 'new', 'reviewing', 'purchased', 'settled', 'rejected'].map(s => (
+            {['all', 'new', 'reviewing', 'ordered', 'purchased', 'settled', 'rejected'].map(s => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
@@ -493,7 +494,7 @@ export default function AdminPage() {
           {selectedIds.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mt-3 flex items-center gap-3 flex-wrap">
               <span className="text-sm font-semibold text-[#0A67A6]">{selectedIds.length}건 선택됨</span>
-              {(['reviewing', 'purchased', 'settled'] as Status[]).map(s => (
+              {(['reviewing', 'ordered', 'purchased', 'settled'] as Status[]).map(s => (
                 <button
                   key={s}
                   onClick={() => handleBulkStatus(s)}

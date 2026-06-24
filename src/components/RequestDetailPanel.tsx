@@ -464,8 +464,8 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         </div>
         <div className="col-span-2"><span className="text-gray-500">용도/사유</span><br /><strong>{request.purpose}</strong></div>
 
-        {/* 구입 정보 — 구입완료·정산완료 상태에서만 표시 */}
-        {(request.status === 'purchased' || request.status === 'settled') && (
+        {/* 구입 정보 — 주문완료·구입완료·정산완료 상태에서만 표시 */}
+        {(request.status === 'ordered' || request.status === 'purchased' || request.status === 'settled') && (
           <div className="col-span-2">
             <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-sm space-y-2">
               {/* 3열 그리드: 구입일자 / 단가 / 수량 */}
@@ -544,16 +544,16 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
 
       {/* 상태 흐름 */}
       <div className="flex items-center gap-1 mb-4 overflow-x-auto">
-        {(['new', 'reviewing', 'purchased', 'settled'] as const).map((s, i) => (
+        {(['new', 'reviewing', 'ordered', 'purchased', 'settled'] as const).map((s, i) => (
           <div key={s} className="flex items-center gap-1 flex-shrink-0">
             <span className={`px-2 py-1 rounded text-xs font-semibold ${
               request.status === s
                 ? 'bg-blue-600 text-white'
-                : ['new', 'reviewing', 'purchased', 'settled'].indexOf(request.status) > i
+                : ['new', 'reviewing', 'ordered', 'purchased', 'settled'].indexOf(request.status) > i
                 ? 'bg-green-100 text-green-700'
                 : 'bg-gray-100 text-gray-400'
             }`}>{STATUS_LABEL[s]}</span>
-            {i < 3 && <span className="text-gray-300">→</span>}
+            {i < 4 && <span className="text-gray-300">→</span>}
           </div>
         ))}
       </div>
