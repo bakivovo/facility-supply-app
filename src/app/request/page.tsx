@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useState, useEffect, useRef } from 'react'
 import { UNITS, STATUS_LABEL, STATUS_COLOR, type Category } from '@/types'
 import { uploadManyToStorage } from '@/lib/uploadToStorage'
+import FooterBadge from '@/components/FooterBadge'
 
 export default function RequestPage() {
   const [categories, setCategories] = useState<Category[]>([])
@@ -587,6 +588,7 @@ export default function RequestPage() {
         </div>{/* /오른쪽 칼럼 */}
 
       </main>
+      <FooterBadge />
     </div>
   )
 }

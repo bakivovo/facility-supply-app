@@ -7,6 +7,7 @@ import AdminHeader from '@/components/AdminHeader'
 import RequestDetailPanel from '@/components/RequestDetailPanel'
 import type { Request, Status } from '@/types'
 import { STATUS_LABEL, STATUS_COLOR, URGENCY_LABEL, URGENCY_COLOR } from '@/types'
+import FooterBadge from '@/components/FooterBadge'
 
 // 3개월 이전 정산완료 항목 중 사진이 남아있는 건 반환
 function getOldPhotoItems(requests: Request[]): Request[] {
@@ -936,6 +937,7 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      <FooterBadge />
     </div>
   )
 }
