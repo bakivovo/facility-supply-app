@@ -1,0 +1,30 @@
+{
+  "name": "건축물관리용품 요청·정산",
+  "short_name": "시설관리용품",
+  "description": "동양미래대학교 사무처 시설관리팀 건축물관리용품 요청 및 정산 시스템",
+  "start_url": "/request",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0A67A6",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
