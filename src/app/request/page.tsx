@@ -28,6 +28,7 @@ export default function RequestPage() {
   const [error, setError] = useState('')
 
   // 통합 검색 (이름 OR 물품명 OR 규격)
+  const [showGuide, setShowGuide] = useState(false)
   const [lookupQuery, setLookupQuery] = useState('')
   const [lookupResults, setLookupResults] = useState<any[] | null>(null)
   const [lookupError, setLookupError] = useState('')
@@ -164,6 +165,7 @@ export default function RequestPage() {
               setPhotoPreviews([])
             }}
             className="w-full py-3 bg-blue-600 text-white rounded-xl font-semibold text-lg hover:bg-blue-700 transition"
+            style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
           >
             새 요청 작성하기
           </button>
@@ -175,7 +177,7 @@ export default function RequestPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 헤더 */}
-      <header style={{ backgroundColor: '#0A67A6' }} className="text-white shrink-0">
+      <header style={{ background: 'linear-gradient(180deg, #0d77bd, #0A67A6)', boxShadow: '0 2px 4px rgba(0,0,0,0.12)' }} className="text-white shrink-0">
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-white rounded-md px-2 py-1 shrink-0 self-stretch flex items-center justify-center">
@@ -193,7 +195,41 @@ export default function RequestPage() {
               <h1 className="text-xl font-bold leading-tight">물품 요청서</h1>
             </div>
           </div>
+          {/* 이용방법 토글 버튼 */}
+          <button
+            type="button"
+            onClick={() => setShowGuide(v => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition"
+            style={{ background: 'rgba(255,255,255,0.18)', color: 'white' }}
+          >
+            <span className="text-base leading-none">?</span>
+            <span>이용방법</span>
+          </button>
         </div>
+
+        {/* 이용방법 패널 */}
+        {showGuide && (
+          <div className="px-4 pb-4">
+            <div className="rounded-xl px-4 py-4" style={{ background: '#FFFBE0', border: '1px solid #EDE900' }}>
+              <p className="text-sm font-bold mb-3" style={{ color: '#5C5300' }}>이용방법</p>
+              <ol className="space-y-2">
+                {[
+                  ['요청 작성', '카테고리·물품명·수량·용도 입력 후 등록'],
+                  ['검토·주문', '시설관리팀이 확인 후 구매 진행'],
+                  ['구입완료', '도착 시 구입가격·구입처 표시'],
+                  ['정산완료', '처리 종료, 최종 확정 상태'],
+                ].map(([title, desc], i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs" style={{ color: '#5C5300' }}>
+                    <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold leading-none mt-0.5" style={{
+                      background: 'linear-gradient(180deg, #0d77bd, #0A67A6)',
+                    }}>{i + 1}</span>
+                    <span><span className="font-semibold">{title}</span> — {desc}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* 2분할 본문 */}
@@ -396,6 +432,7 @@ export default function RequestPage() {
             type="submit"
             disabled={submitting}
             className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
           >
             {submitting ? '제출 중...' : '요청 제출하기'}
           </button>
@@ -464,7 +501,7 @@ export default function RequestPage() {
                 filteredLookupResults.map((r: any) => {
                   const isPurchased = r.status === 'purchased' || r.status === 'settled'
                   return (
-                    <div key={r.receipt_number} className="bg-white border border-gray-200 rounded-xl p-4">
+                    <div key={r.receipt_number} className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                       {/* 상단: 접수번호 + 상태 배지 */}
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-mono text-xs text-gray-500">{r.receipt_number}</span>

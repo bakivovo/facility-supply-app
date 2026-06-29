@@ -23,7 +23,7 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
   ]
 
   return (
-    <header style={{ backgroundColor: '#0A67A6' }} className="text-white">
+    <header style={{ background: 'linear-gradient(180deg, #0d77bd, #0A67A6)', boxShadow: '0 2px 4px rgba(0,0,0,0.12)' }} className="text-white">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between py-3">
 
@@ -48,7 +48,7 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
           {/* 로그아웃 — DMU Yellow */}
           <button
             onClick={handleLogout}
-            style={{ backgroundColor: '#EDE900', color: '#1a1a00' }}
+            style={{ backgroundColor: '#EDE900', color: '#1a1a00', boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
             className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:brightness-95 transition"
           >
             로그아웃

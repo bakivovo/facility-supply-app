@@ -408,17 +408,31 @@ export default function AdminPage() {
               <p className="text-xs text-gray-400 text-right mb-1.5">{filterLabel}</p>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {[
-                  { label: '신규 요청',  value: dynamicStats.new,                                        color: 'bg-green-50  border-green-200  text-green-700'  },
-                  { label: '처리 중',    value: dynamicStats.reviewing + dynamicStats.purchased,          color: 'bg-orange-50 border-orange-200 text-orange-700' },
-                  { label: '구입 완료',  value: dynamicStats.purchased,                                  color: 'bg-blue-50   border-blue-200   text-[#0A67A6]'   },
-                  { label: '구매금액',   value: dynamicStats.settled_purchase.toLocaleString() + '원',   color: 'bg-purple-50 border-purple-200 text-purple-700' },
-                  { label: '배송비',     value: dynamicStats.settled_shipping.toLocaleString() + '원',   color: 'bg-pink-50   border-pink-200   text-pink-700'   },
-                  { label: '합계',       value: dynamicStats.settled_total.toLocaleString()    + '원',   color: 'bg-gray-50   border-gray-200   text-gray-700'   },
+                  { label: '신규 요청', value: dynamicStats.new,                                       color: 'bg-green-50  border-green-200  text-green-700',  leftColor: '#2E9E5B' },
+                  { label: '처리 중',   value: dynamicStats.reviewing + dynamicStats.ordered + dynamicStats.purchased, color: 'bg-orange-50 border-orange-200 text-orange-700', leftColor: '#C97A1E' },
+                  { label: '구입 완료', value: dynamicStats.purchased,                                 color: 'bg-blue-50   border-blue-200   text-[#0A67A6]',  leftColor: '#0A67A6' },
+                  { label: '구매금액',  value: dynamicStats.settled_purchase.toLocaleString() + '원',  color: 'bg-purple-50 border-purple-200 text-purple-700', leftColor: null },
+                  { label: '배송비',    value: dynamicStats.settled_shipping.toLocaleString() + '원',  color: 'bg-pink-50   border-pink-200   text-pink-700',   leftColor: null },
+                  { label: '합계',      value: dynamicStats.settled_total.toLocaleString()    + '원',  color: '', leftColor: null, isTotal: true },
                 ].map((card, i) => (
-                  <div key={i} className={`bg-white border rounded-xl p-4 ${card.color}`}>
-                    <p className="text-xs font-medium opacity-70 mb-1">{card.label}</p>
-                    <p className="text-xl font-bold">{card.value}</p>
-                  </div>
+                  card.isTotal ? (
+                    <div key={i} className="rounded-xl p-4" style={{
+                      background: 'linear-gradient(180deg, #0d77bd, #0A67A6)',
+                      boxShadow: '0 2px 6px rgba(10,103,166,0.25)',
+                      border: 'none',
+                    }}>
+                      <p className="text-xs font-medium text-white/80 mb-1">{card.label}</p>
+                      <p className="text-xl font-bold text-white">{card.value}</p>
+                    </div>
+                  ) : (
+                    <div key={i} className={`bg-white border rounded-xl p-4 ${card.color}`} style={{
+                      borderLeft: card.leftColor ? `3px solid ${card.leftColor}` : undefined,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                    }}>
+                      <p className="text-xs font-medium opacity-70 mb-1">{card.label}</p>
+                      <p className="text-xl font-bold">{card.value}</p>
+                    </div>
+                  )
                 ))}
               </div>
             </div>
@@ -516,8 +530,10 @@ export default function AdminPage() {
 
           </div>{/* ── /sticky 고정 영역 ── */}
 
-          {/* 요청 목록 */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mt-3">
+          {/* 요청 목록 + 이용방법 사이드바 */}
+          <div className="flex gap-3 mt-3 items-start">
+          <div className="flex-1 min-w-0">
+          <div className="bg-white rounded-xl overflow-hidden" style={{ border: '0.5px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
             {loading ? (
               <div className="py-16 text-center text-gray-400">불러오는 중...</div>
             ) : filteredRequests.length === 0 ? (
@@ -625,6 +641,39 @@ export default function AdminPage() {
               </table>
             )}
           </div>
+          </div>{/* /flex-1 */}
+
+          {/* 이용방법 사이드바 */}
+          <div className="hidden lg:flex flex-col w-52 shrink-0 rounded-xl overflow-hidden sticky top-[calc(var(--sticky-h,180px)+12px)]" style={{
+            background: '#FFFBE0',
+            borderLeft: '0.5px solid #EDE900',
+            boxShadow: 'inset 3px 0 6px -4px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.06)',
+          }}>
+            <div className="px-4 pt-4 pb-5 space-y-3">
+              <p className="text-sm font-bold" style={{ color: '#5C5300' }}>이용방법</p>
+              <ol className="space-y-2.5">
+                {[
+                  '신규요청 확인 후 검토 진행',
+                  '상태 변경 (체크박스로 일괄 변경 가능)',
+                  '구입정보 입력 (단가·수량 → 자동계산)',
+                  '증빙 사진(납품·영수증) 업로드',
+                  '정산완료 처리 → 관리대장 자동 반영',
+                ].map((step, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs" style={{ color: '#5C5300' }}>
+                    <span className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold leading-none mt-0.5" style={{
+                      background: 'linear-gradient(180deg, #0d77bd, #0A67A6)',
+                    }}>{i + 1}</span>
+                    <span className="leading-snug opacity-85">{step}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="text-[10px] leading-snug pt-1 border-t" style={{ color: '#8a7400', borderColor: '#EDE900' }}>
+                월별정산 엑셀은 새로고침 옆 메뉴에서
+              </p>
+            </div>
+          </div>
+          </div>{/* /flex gap-3 */}
+
         </div>
       )}
 
