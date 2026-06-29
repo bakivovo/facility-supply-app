@@ -554,14 +554,14 @@ export default function AdminPage() {
                     </th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold">접수번호</th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden md:table-cell">카테고리</th>
-                    <th className="px-3 py-3 text-left text-gray-600 font-semibold">물품명</th>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold max-w-[160px]">물품명</th>
                     <th className="px-3 py-3 text-right text-gray-600 font-semibold hidden xl:table-cell">단가</th>
                     <th className="px-3 py-3 text-right text-gray-600 font-semibold hidden xl:table-cell">수량</th>
                     <th className="px-3 py-3 text-right text-gray-600 font-semibold hidden lg:table-cell">구입금액</th>
                     <th className="px-3 py-3 text-right text-gray-600 font-semibold hidden lg:table-cell">배송료</th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden sm:table-cell">요청자</th>
-                    <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden lg:table-cell">긴급도</th>
-                    <th className="px-3 py-3 text-left text-gray-600 font-semibold">상태</th>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden lg:table-cell" style={{ minWidth: '64px' }}>긴급도</th>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold" style={{ minWidth: '84px' }}>상태</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -612,13 +612,15 @@ export default function AdminPage() {
                           {req.shipping_fee != null ? req.shipping_fee.toLocaleString() : '-'}
                         </td>
                         <td className="px-3 py-3 hidden sm:table-cell text-gray-600">{req.requester_name}</td>
-                        <td className="px-3 py-3 hidden lg:table-cell">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${URGENCY_COLOR[req.urgency]}`}>
+                        <td className="px-3 py-3 hidden lg:table-cell" style={{ minWidth: '64px' }}>
+                          <span className={`rounded-full text-xs font-medium ${URGENCY_COLOR[req.urgency]}`}
+                            style={{ padding: '3px 8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
                             {URGENCY_LABEL[req.urgency]}
                           </span>
                         </td>
-                        <td className="px-3 py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLOR[req.status]}`}>
+                        <td className="px-3 py-3" style={{ minWidth: '84px' }}>
+                          <span className={`rounded-full text-xs font-semibold ${STATUS_COLOR[req.status]}`}
+                            style={{ padding: '3px 8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
                             {STATUS_LABEL[req.status]}
                           </span>
                         </td>
