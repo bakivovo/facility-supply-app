@@ -45,14 +45,28 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
             </div>
           </div>
 
-          {/* 로그아웃 — DMU Yellow */}
-          <button
-            onClick={handleLogout}
-            style={{ backgroundColor: '#EDE900', color: '#1a1a00', boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:brightness-95 transition"
-          >
-            로그아웃
-          </button>
+          {/* 버전 배지 + 로그아웃 */}
+          <div className="flex flex-col items-end gap-1.5">
+            <span
+              className="text-[10px] leading-none select-none"
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                color: 'rgba(255,255,255,0.85)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                borderRadius: '999px',
+                padding: '3px 10px',
+              }}
+            >
+              v{process.env.NEXT_PUBLIC_APP_VERSION} &copy; {new Date().getFullYear()} 사무처 시설관리팀 박희찬
+            </span>
+            <button
+              onClick={handleLogout}
+              style={{ backgroundColor: '#EDE900', color: '#1a1a00', boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:brightness-95 transition"
+            >
+              로그아웃
+            </button>
+          </div>
         </div>
 
         {/* 탭 네비게이션 */}

@@ -4,7 +4,6 @@ import Image from 'next/image'
 import { useState, useEffect, useRef } from 'react'
 import { UNITS, STATUS_LABEL, STATUS_COLOR, type Category } from '@/types'
 import { uploadManyToStorage } from '@/lib/uploadToStorage'
-import FooterBadge from '@/components/FooterBadge'
 
 export default function RequestPage() {
   const [categories, setCategories] = useState<Category[]>([])
@@ -196,16 +195,30 @@ export default function RequestPage() {
               <h1 className="text-xl font-bold leading-tight">물품 요청서</h1>
             </div>
           </div>
-          {/* 이용방법 토글 버튼 */}
-          <button
-            type="button"
-            onClick={() => setShowGuide(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition"
-            style={{ background: 'rgba(255,255,255,0.18)', color: 'white' }}
-          >
-            <span className="text-base leading-none">?</span>
-            <span>이용방법</span>
-          </button>
+          {/* 버전 배지 + 이용방법 버튼 */}
+          <div className="flex flex-col items-end gap-1.5">
+            <span
+              className="text-[10px] leading-none select-none"
+              style={{
+                background: 'rgba(255,255,255,0.15)',
+                color: 'rgba(255,255,255,0.85)',
+                border: '1px solid rgba(255,255,255,0.25)',
+                borderRadius: '999px',
+                padding: '3px 10px',
+              }}
+            >
+              v{process.env.NEXT_PUBLIC_APP_VERSION} &copy; {new Date().getFullYear()} 사무처 시설관리팀 박희찬
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowGuide(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition"
+              style={{ background: 'rgba(255,255,255,0.18)', color: 'white' }}
+            >
+              <span className="text-base leading-none">?</span>
+              <span>이용방법</span>
+            </button>
+          </div>
         </div>
 
         {/* 이용방법 패널 */}
@@ -588,7 +601,6 @@ export default function RequestPage() {
         </div>{/* /오른쪽 칼럼 */}
 
       </main>
-      <FooterBadge />
     </div>
   )
 }
