@@ -195,10 +195,11 @@ export default function RequestPage() {
               <h1 className="text-xl font-bold leading-tight">물품 요청서</h1>
             </div>
           </div>
-          {/* 버전 배지 + 이용방법 버튼 */}
-          <div className="flex flex-col items-end gap-1.5">
+          {/* 우측: 버전 배지 + 버튼 묶음 */}
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            {/* 버전 배지 */}
             <span
-              className="text-[10px] leading-none select-none"
+              className="text-[10px] leading-none select-none whitespace-nowrap"
               style={{
                 background: 'rgba(255,255,255,0.15)',
                 color: 'rgba(255,255,255,0.85)',
@@ -209,15 +210,26 @@ export default function RequestPage() {
             >
               v{process.env.NEXT_PUBLIC_APP_VERSION} &copy; {new Date().getFullYear()} 사무처 시설관리팀 박희찬
             </span>
-            <button
-              type="button"
-              onClick={() => setShowGuide(v => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition"
-              style={{ background: 'rgba(255,255,255,0.18)', color: 'white' }}
-            >
-              <span className="text-base leading-none">?</span>
-              <span>이용방법</span>
-            </button>
+            {/* 관리자 + 이용방법 버튼 */}
+            <div className="flex items-center gap-1.5">
+              <a
+                href="/admin"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition whitespace-nowrap"
+                style={{ background: 'rgba(255,255,255,0.18)', color: 'white', borderRadius: '999px' }}
+              >
+                <span className="text-sm leading-none">🔒</span>
+                <span>관리자</span>
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowGuide(v => !v)}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition whitespace-nowrap"
+                style={{ background: 'rgba(255,255,255,0.18)', color: 'white', borderRadius: '999px' }}
+              >
+                <span className="text-sm leading-none">?</span>
+                <span>이용방법</span>
+              </button>
+            </div>
           </div>
         </div>
 
