@@ -23,7 +23,7 @@ export interface Request {
   shipping_fee: number | null
   purchase_date: string | null
   memo: string | null
-  planned_month: string | null
+  purchase_month: string | null
   delivery_photo_urls: string[] | null
   receipt_photo_urls: ReceiptPhoto[] | null
   created_at: string

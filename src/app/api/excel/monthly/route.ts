@@ -12,11 +12,11 @@ export async function GET(request: NextRequest) {
     const [year, mon] = month.split('-')
 
     const supabase = getSupabaseAdmin()
-    // planned_month 기준으로 집계 (이관된 건은 이관된 월로 포함)
+    // purchase_month 기준으로 집계 (이관된 건은 이관된 월로 포함)
     const { data, error } = await supabase
       .from('requests')
       .select('*')
-      .eq('planned_month', month)
+      .eq('purchase_month', month)
       .eq('status', 'settled')
       .order('purchase_date', { ascending: true })
 

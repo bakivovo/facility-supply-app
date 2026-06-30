@@ -120,9 +120,9 @@ export default function AdminPage() {
         const currentYY = String(new Date().getFullYear()).slice(2)
         yearSet.add(currentYY)
         ;(data || []).forEach((r: any) => {
-          // planned_month 기준 연도 우선 (이관된 건 포함)
-          if (r.planned_month) {
-            const yy = r.planned_month.slice(2, 4)
+          // purchase_month 기준 연도 우선 (이관된 건 포함)
+          if (r.purchase_month) {
+            const yy = r.purchase_month.slice(2, 4)
             if (/^\d{2}$/.test(yy)) yearSet.add(yy)
           }
           const yy = r.receipt_number?.split('-')[0]
@@ -189,7 +189,7 @@ export default function AdminPage() {
     await fetch('/api/admin/requests', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: eligible, planned_month: target }),
+      body: JSON.stringify({ ids: eligible, purchase_month: target }),
     })
     await fetchAll()
     setTransferLoading(false)
@@ -395,12 +395,12 @@ export default function AdminPage() {
     return acc
   }, {})
 
-  // 연도·월 필터 (상태 무관) — planned_month 기준 (없으면 receipt_number fallback)
+  // 연도·월 필터 (상태 무관) — purchase_month 기준 (없으면 receipt_number fallback)
   const yearMonthFiltered = requests.filter(req => {
     let refYY: string, refMM: string
-    if (req.planned_month) {
-      refYY = req.planned_month.slice(2, 4)                        // "2026-06" → "26"
-      refMM = String(parseInt(req.planned_month.slice(5, 7)))      // "06" → "6"
+    if (req.purchase_month) {
+      refYY = req.purchase_month.slice(2, 4)                        // "2026-06" → "26"
+      refMM = String(parseInt(req.purchase_month.slice(5, 7)))      // "06" → "6"
     } else {
       const parts = req.receipt_number?.split('-') ?? []
       if (parts.length < 2) return false
@@ -664,8 +664,8 @@ export default function AdminPage() {
                             const receiptYM = req.receipt_number
                               ? `20${req.receipt_number.split('-')[0]}-${req.receipt_number.split('-')[1]}`
                               : null
-                            if (req.planned_month && receiptYM && req.planned_month !== receiptYM) {
-                              const m = parseInt(req.planned_month.split('-')[1])
+                            if (req.purchase_month && receiptYM && req.purchase_month !== receiptYM) {
+                              const m = parseInt(req.purchase_month.split('-')[1])
                               return (
                                 <span className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap">
                                   →{m}월 이관
