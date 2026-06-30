@@ -11,16 +11,12 @@ export async function GET(request: NextRequest) {
 
     const [year, mon] = month.split('-')
 
-    // 다음 달 1일을 상한으로 사용 (월말 일수 차이 문제 회피)
-    const nextMonth = new Date(parseInt(year), parseInt(mon), 1)
-    const nextMonthStr = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}-01`
-
     const supabase = getSupabaseAdmin()
+    // planned_month 기준으로 집계 (이관된 건은 이관된 월로 포함)
     const { data, error } = await supabase
       .from('requests')
       .select('*')
-      .gte('created_at', `${year}-${mon}-01`)
-      .lt('created_at', nextMonthStr)
+      .eq('planned_month', month)
       .eq('status', 'settled')
       .order('purchase_date', { ascending: true })
 

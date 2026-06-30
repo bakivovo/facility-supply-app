@@ -75,6 +75,23 @@ export default function AdminPage() {
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
   const [pwMsg, setPwMsg] = useState('')
 
+  // 구매월 이관 모달
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferYear, setTransferYear] = useState(() => String(new Date().getFullYear()))
+  const [transferMonth, setTransferMonth] = useState(() => {
+    const next = new Date(); next.setMonth(next.getMonth() + 1)
+    return String(next.getMonth() + 1)
+  })
+  const [transferLoading, setTransferLoading] = useState(false)
+
+  // 토스트
+  const [toastMsg, setToastMsg] = useState('')
+  const [toastVisible, setToastVisible] = useState(false)
+  const showToast = (msg: string) => {
+    setToastMsg(msg); setToastVisible(true)
+    setTimeout(() => setToastVisible(false), 4000)
+  }
+
   // 사진 정리
   const [photoDownloading, setPhotoDownloading] = useState(false)
   const [photoDownloadDone, setPhotoDownloadDone] = useState(false)
@@ -103,6 +120,11 @@ export default function AdminPage() {
         const currentYY = String(new Date().getFullYear()).slice(2)
         yearSet.add(currentYY)
         ;(data || []).forEach((r: any) => {
+          // planned_month 기준 연도 우선 (이관된 건 포함)
+          if (r.planned_month) {
+            const yy = r.planned_month.slice(2, 4)
+            if (/^\d{2}$/.test(yy)) yearSet.add(yy)
+          }
           const yy = r.receipt_number?.split('-')[0]
           if (yy && /^\d{2}$/.test(yy)) yearSet.add(yy)
         })
@@ -150,6 +172,32 @@ export default function AdminPage() {
     setSelectedIds([])
     await fetchAll()
     setBulkLoading(false)
+  }
+
+  const handleTransfer = async () => {
+    const target = `${transferYear}-${transferMonth.padStart(2, '0')}`
+    const eligible = selectedIds.filter(id => {
+      const r = requests.find(r => r.id === id)
+      return r && r.status !== 'purchased' && r.status !== 'settled'
+    })
+    const skipped = selectedIds.length - eligible.length
+    if (eligible.length === 0) {
+      alert('이관 가능한 건이 없습니다.\n구입완료·정산완료 상태는 이관할 수 없습니다.')
+      return
+    }
+    setTransferLoading(true)
+    await fetch('/api/admin/requests', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: eligible, planned_month: target }),
+    })
+    await fetchAll()
+    setTransferLoading(false)
+    setTransferOpen(false)
+    const label = `${transferYear}년 ${parseInt(transferMonth)}월`
+    showToast(skipped > 0
+      ? `${eligible.length}건이 ${label}로 이관되었습니다. (${skipped}건 건너뜀)`
+      : `${eligible.length}건이 ${label}로 이관되었습니다.`)
   }
 
   const handleBulkExcel = async () => {
@@ -347,12 +395,20 @@ export default function AdminPage() {
     return acc
   }, {})
 
-  // 연도·월 필터 (상태 무관) — 카드 통계 기준
+  // 연도·월 필터 (상태 무관) — planned_month 기준 (없으면 receipt_number fallback)
   const yearMonthFiltered = requests.filter(req => {
-    const parts = req.receipt_number?.split('-') ?? []
-    if (parts.length < 2) return false
-    if (parts[0] !== yearFilter) return false
-    if (monthFilter !== 'all' && parseInt(parts[1]) !== parseInt(monthFilter)) return false
+    let refYY: string, refMM: string
+    if (req.planned_month) {
+      refYY = req.planned_month.slice(2, 4)                        // "2026-06" → "26"
+      refMM = String(parseInt(req.planned_month.slice(5, 7)))      // "06" → "6"
+    } else {
+      const parts = req.receipt_number?.split('-') ?? []
+      if (parts.length < 2) return false
+      refYY = parts[0]
+      refMM = String(parseInt(parts[1]))
+    }
+    if (refYY !== yearFilter) return false
+    if (monthFilter !== 'all' && refMM !== monthFilter) return false
     return true
   })
 
@@ -519,6 +575,17 @@ export default function AdminPage() {
                 </button>
               ))}
               <button
+                onClick={() => {
+                  const next = new Date(); next.setMonth(next.getMonth() + 1)
+                  setTransferYear(String(next.getFullYear()))
+                  setTransferMonth(String(next.getMonth() + 1))
+                  setTransferOpen(true)
+                }}
+                className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition"
+              >
+                📅 구매월 이관
+              </button>
+              <button
                 onClick={handleBulkExcel}
                 disabled={bulkExcelLoading}
                 className="px-3 py-1.5 bg-[#0A67A6] text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60 ml-auto"
@@ -593,6 +660,20 @@ export default function AdminPage() {
                           {req.request_photos && req.request_photos.length > 0 && (
                             <span className="ml-1 text-gray-400">📷</span>
                           )}
+                          {(() => {
+                            const receiptYM = req.receipt_number
+                              ? `20${req.receipt_number.split('-')[0]}-${req.receipt_number.split('-')[1]}`
+                              : null
+                            if (req.planned_month && receiptYM && req.planned_month !== receiptYM) {
+                              const m = parseInt(req.planned_month.split('-')[1])
+                              return (
+                                <span className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap">
+                                  →{m}월 이관
+                                </span>
+                              )
+                            }
+                            return null
+                          })()}
                         </td>
                         <td className="px-3 py-3 hidden md:table-cell text-gray-600">{req.category}</td>
                         <td className="px-3 py-3">
@@ -909,6 +990,60 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+      {/* 구매월 이관 모달 */}
+      {transferOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setTransferOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-80 mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-gray-800 mb-1">구매월 이관</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              선택된 {selectedIds.length}건의 구매예정월을 변경합니다.<br />
+              <span className="text-amber-600 font-medium">구입완료·정산완료 상태는 자동으로 건너뜁니다.</span>
+            </p>
+            <div className="flex gap-2 mb-5">
+              <select
+                value={transferYear}
+                onChange={e => setTransferYear(e.target.value)}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                {[...Array(3)].map((_, i) => {
+                  const y = String(new Date().getFullYear() + i - 1)
+                  return <option key={y} value={y}>{y}년</option>
+                })}
+              </select>
+              <select
+                value={transferMonth}
+                onChange={e => setTransferMonth(e.target.value)}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                  <option key={m} value={String(m)}>{m}월</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTransferOpen(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition"
+              >취소</button>
+              <button
+                onClick={handleTransfer}
+                disabled={transferLoading}
+                className="flex-1 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
+              >{transferLoading ? '이관 중...' : '이관 확인'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 토스트 */}
+      {toastVisible && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+          <div className="bg-gray-800 text-white text-sm font-medium px-5 py-3 rounded-full shadow-lg">
+            {toastMsg}
+          </div>
+        </div>
+      )}
+
       {/* 사진 삭제 확인 모달 */}
       {showPhotoDeleteModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

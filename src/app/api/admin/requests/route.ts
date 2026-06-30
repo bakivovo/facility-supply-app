@@ -33,7 +33,7 @@ export async function PATCH(request: NextRequest) {
   const supabase = getSupabaseAdmin()
   const body = await request.json()
   const { ids, status, reject_reason, item_name, spec, vendor, unit_price, purchase_quantity, amount, shipping_fee, purchase_date, memo,
-          delivery_photo_urls, receipt_photo_urls } = body
+          planned_month, delivery_photo_urls, receipt_photo_urls } = body
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     return NextResponse.json({ error: 'ids가 필요합니다.' }, { status: 400 })
@@ -51,6 +51,7 @@ export async function PATCH(request: NextRequest) {
   if (shipping_fee !== undefined) updateData.shipping_fee = shipping_fee
   if (purchase_date !== undefined) updateData.purchase_date = purchase_date
   if (memo !== undefined) updateData.memo = memo
+  if (planned_month !== undefined) updateData.planned_month = planned_month
   if (delivery_photo_urls !== undefined) updateData.delivery_photo_urls = delivery_photo_urls
   if (receipt_photo_urls !== undefined) updateData.receipt_photo_urls = receipt_photo_urls
 
