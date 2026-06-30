@@ -59,13 +59,23 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
             >
               v{process.env.NEXT_PUBLIC_APP_VERSION} &copy; {new Date().getFullYear()} 사무처 시설관리팀 박희찬
             </span>
-            <button
-              onClick={handleLogout}
-              style={{ backgroundColor: '#EDE900', color: '#1a1a00', boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
-              className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:brightness-95 transition"
-            >
-              로그아웃
-            </button>
+            <div className="flex items-center gap-1.5">
+              <a
+                href="/request"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition whitespace-nowrap"
+                style={{ background: 'rgba(255,255,255,0.18)', color: 'white', borderRadius: '999px' }}
+              >
+                <span className="text-sm leading-none">📋</span>
+                <span>요청 페이지</span>
+              </a>
+              <button
+                onClick={handleLogout}
+                style={{ backgroundColor: '#EDE900', color: '#1a1a00', boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg hover:brightness-95 transition whitespace-nowrap"
+              >
+                로그아웃
+              </button>
+            </div>
           </div>
         </div>
 
