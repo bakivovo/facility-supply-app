@@ -64,3 +64,20 @@ export async function PATCH(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true, data })
 }
+
+export async function DELETE(request: NextRequest) {
+  const supabase = getSupabaseAdmin()
+  const { ids } = await request.json()
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: 'ids가 필요합니다.' }, { status: 400 })
+  }
+
+  const { error } = await supabase
+    .from('requests')
+    .delete()
+    .in('id', ids)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true, deleted: ids.length })
+}

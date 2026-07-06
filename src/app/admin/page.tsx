@@ -75,6 +75,10 @@ export default function AdminPage() {
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
   const [pwMsg, setPwMsg] = useState('')
 
+  // 일괄 삭제 모달
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
   // 구매월 이관 모달
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferYear, setTransferYear] = useState(() => String(new Date().getFullYear()))
@@ -198,6 +202,45 @@ export default function AdminPage() {
     showToast(skipped > 0
       ? `${eligible.length}건이 ${label}로 이관되었습니다. (${skipped}건 건너뜀)`
       : `${eligible.length}건이 ${label}로 이관되었습니다.`)
+  }
+
+  const handleBulkDelete = async () => {
+    const blocked = selectedIds.filter(id => {
+      const r = requests.find(r => r.id === id)
+      return r && (r.status === 'purchased' || r.status === 'settled')
+    })
+    if (blocked.length > 0) {
+      const eligible = selectedIds.filter(id => {
+        const r = requests.find(r => r.id === id)
+        return r && r.status !== 'purchased' && r.status !== 'settled'
+      })
+      if (eligible.length === 0) {
+        alert(`완료 처리된 건은 삭제할 수 없습니다.\n선택된 ${blocked.length}건 모두 구입완료·정산완료 상태입니다.`)
+        setDeleteOpen(false)
+        return
+      }
+      // 일부만 삭제 가능한 경우 계속 진행 (토스트에서 안내)
+    }
+    const eligible = selectedIds.filter(id => {
+      const r = requests.find(r => r.id === id)
+      return r && r.status !== 'purchased' && r.status !== 'settled'
+    })
+    const skipped = selectedIds.length - eligible.length
+    setDeleteLoading(true)
+    const res = await fetch('/api/admin/requests', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: eligible }),
+    })
+    const data = await res.json()
+    setDeleteLoading(false)
+    setDeleteOpen(false)
+    if (!res.ok) { alert('삭제 오류: ' + data.error); return }
+    setSelectedIds([])
+    await fetchAll()
+    showToast(skipped > 0
+      ? `${eligible.length}건이 삭제되었습니다. (완료 처리 ${skipped}건 제외)`
+      : `${eligible.length}건이 삭제되었습니다.`)
   }
 
   const handleBulkExcel = async () => {
@@ -584,6 +627,13 @@ export default function AdminPage() {
                 className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition"
               >
                 📅 구매월 이관
+              </button>
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="px-3 py-1.5 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition"
+                style={{ backgroundColor: '#DC2626' }}
+              >
+                🗑 삭제
               </button>
               <button
                 onClick={handleBulkExcel}
@@ -1030,6 +1080,32 @@ export default function AdminPage() {
                 disabled={transferLoading}
                 className="flex-1 px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
               >{transferLoading ? '이관 중...' : '이관 확인'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 일괄 삭제 확인 모달 */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDeleteOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-80 mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-red-700 mb-2">⚠️ 삭제 확인</h3>
+            <p className="text-sm text-gray-700 mb-1">
+              선택한 <span className="font-bold">{selectedIds.length}건</span>을 삭제하시겠습니까?
+            </p>
+            <p className="text-xs text-gray-400 mb-1">삭제 후 복구할 수 없습니다.</p>
+            <p className="text-xs text-amber-600 mb-5">구입완료·정산완료 상태는 자동으로 제외됩니다.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeleteOpen(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition"
+              >취소</button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={deleteLoading}
+                className="flex-1 px-4 py-2 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
+                style={{ backgroundColor: '#DC2626' }}
+              >{deleteLoading ? '삭제 중...' : '삭제 확인'}</button>
             </div>
           </div>
         </div>
