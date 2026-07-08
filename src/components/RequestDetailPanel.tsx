@@ -13,6 +13,18 @@ interface Props {
   onClose: () => void
 }
 
+// 숫자 문자열에 천원단위 콤마 적용 (표시 전용, 빈 값은 빈 문자열 유지)
+function formatThousands(value: string): string {
+  const digits = value.replace(/[^\d]/g, '')
+  if (!digits) return ''
+  return parseInt(digits, 10).toLocaleString()
+}
+
+// 콤마 포맷 문자열에서 순수 숫자 문자열만 추출
+function stripThousands(value: string): string {
+  return value.replace(/[^\d]/g, '')
+}
+
 async function safeJson(res: Response): Promise<{ ok: boolean; data: any }> {
   const text = await res.text()
   try {
@@ -462,7 +474,8 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
             {/* 오른쪽: 단가 */}
             <div>
               <label className="text-xs text-gray-600 font-medium mb-1 block">단가 (원)</label>
-              <input type="number" value={unitPrice} onChange={e => setUnitPrice(e.target.value)}
+              <input type="text" inputMode="numeric" value={formatThousands(unitPrice)}
+                onChange={e => setUnitPrice(stripThousands(e.target.value))}
                 disabled={isSettled} placeholder="0" className={inputCls} />
             </div>
 
@@ -483,7 +496,8 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               <label className="text-xs text-gray-600 font-medium mb-1 block">
                 배송비 (원) {!isSettled && <span className="text-gray-400 font-normal">선택</span>}
               </label>
-              <input type="number" value={shippingFee} onChange={e => setShippingFee(e.target.value)}
+              <input type="text" inputMode="numeric" value={formatThousands(shippingFee)}
+                onChange={e => setShippingFee(stripThousands(e.target.value))}
                 disabled={isSettled} placeholder="0" className={inputCls} />
             </div>
           </div>
@@ -606,10 +620,12 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       {/* ══ 버튼 영역 ══ */}
       {request.status !== 'rejected' && (
         <div className="flex gap-2 flex-wrap items-center mt-4 pt-4 border-t border-gray-200">
-          <button onClick={handleSave} disabled={saveStatus === 'saving' || loading}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition disabled:opacity-60">
-            {saveStatus === 'saving' ? '저장 중...' : '저장'}
-          </button>
+          {!isSettled && (
+            <button onClick={handleSave} disabled={saveStatus === 'saving' || loading}
+              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition disabled:opacity-60">
+              {saveStatus === 'saving' ? '저장 중...' : '저장'}
+            </button>
+          )}
           {saveStatus === 'saved' && <span className="text-sm text-green-600 font-medium">저장됨 ✓</span>}
           {saveStatus === 'error' && <span className="text-sm text-red-500">{saveError || '저장 실패'}</span>}
 
