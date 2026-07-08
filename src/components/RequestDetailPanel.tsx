@@ -657,8 +657,10 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
             )
           )}
 
-          <button onClick={onClose}
-            className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition">닫기</button>
+          {!isSettled && (
+            <button onClick={onClose}
+              className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition">닫기</button>
+          )}
         </div>
       )}
 
