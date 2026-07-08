@@ -182,11 +182,11 @@ export default function AdminPage() {
     const target = `${transferYear}-${transferMonth.padStart(2, '0')}`
     const eligible = selectedIds.filter(id => {
       const r = requests.find(r => r.id === id)
-      return r && r.status !== 'purchased' && r.status !== 'settled'
+      return r && r.status !== 'settled'
     })
     const skipped = selectedIds.length - eligible.length
     if (eligible.length === 0) {
-      alert('이관 가능한 건이 없습니다.\n구입완료·정산완료 상태는 이관할 수 없습니다.')
+      alert('이관 가능한 건이 없습니다.\n정산완료 상태는 이관할 수 없습니다.')
       return
     }
     setTransferLoading(true)
@@ -207,15 +207,15 @@ export default function AdminPage() {
   const handleBulkDelete = async () => {
     const blocked = selectedIds.filter(id => {
       const r = requests.find(r => r.id === id)
-      return r && (r.status === 'purchased' || r.status === 'settled')
+      return r && r.status === 'settled'
     })
     if (blocked.length > 0) {
       const eligible = selectedIds.filter(id => {
         const r = requests.find(r => r.id === id)
-        return r && r.status !== 'purchased' && r.status !== 'settled'
+        return r && r.status !== 'settled'
       })
       if (eligible.length === 0) {
-        alert(`완료 처리된 건은 삭제할 수 없습니다.\n선택된 ${blocked.length}건 모두 구입완료·정산완료 상태입니다.`)
+        alert(`정산완료 건은 삭제할 수 없습니다.\n선택된 ${blocked.length}건 모두 정산완료 상태입니다.`)
         setDeleteOpen(false)
         return
       }
@@ -223,7 +223,7 @@ export default function AdminPage() {
     }
     const eligible = selectedIds.filter(id => {
       const r = requests.find(r => r.id === id)
-      return r && r.status !== 'purchased' && r.status !== 'settled'
+      return r && r.status !== 'settled'
     })
     const skipped = selectedIds.length - eligible.length
     setDeleteLoading(true)
@@ -473,7 +473,6 @@ export default function AdminPage() {
     new:              yearMonthFiltered.filter(r => r.status === 'new').length,
     reviewing:        yearMonthFiltered.filter(r => r.status === 'reviewing').length,
     ordered:          yearMonthFiltered.filter(r => r.status === 'ordered').length,
-    purchased:        yearMonthFiltered.filter(r => r.status === 'purchased').length,
     settled_purchase: settledItems.reduce((s, r) => s + (r.amount       || 0), 0),
     settled_shipping: settledItems.reduce((s, r) => s + (r.shipping_fee || 0), 0),
     settled_total:    settledItems.reduce((s, r) => s + (r.amount || 0) + (r.shipping_fee || 0), 0),
@@ -508,8 +507,8 @@ export default function AdminPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 {[
                   { label: '신규 요청', value: dynamicStats.new,                                       color: 'bg-green-50  border-green-200  text-green-700',  leftColor: '#2E9E5B' },
-                  { label: '처리 중',   value: dynamicStats.reviewing + dynamicStats.ordered + dynamicStats.purchased, color: 'bg-orange-50 border-orange-200 text-orange-700', leftColor: '#C97A1E' },
-                  { label: '구입 완료', value: dynamicStats.purchased,                                 color: 'bg-blue-50   border-blue-200   text-[#0A67A6]',  leftColor: '#0A67A6' },
+                  { label: '처리 중',   value: dynamicStats.reviewing + dynamicStats.ordered, color: 'bg-orange-50 border-orange-200 text-orange-700', leftColor: '#C97A1E' },
+                  { label: '주문완료', value: dynamicStats.ordered,                                   color: 'bg-purple-50 border-purple-200 text-purple-700',  leftColor: '#7c3aed' },
                   { label: '구매금액',  value: dynamicStats.settled_purchase.toLocaleString() + '원',  color: 'bg-purple-50 border-purple-200 text-purple-700', leftColor: null },
                   { label: '배송비',    value: dynamicStats.settled_shipping.toLocaleString() + '원',  color: 'bg-pink-50   border-pink-200   text-pink-700',   leftColor: null },
                   { label: '합계',      value: dynamicStats.settled_total.toLocaleString()    + '원',  color: '', leftColor: null, isTotal: true },
@@ -588,7 +587,7 @@ export default function AdminPage() {
             <div className="w-px h-5 bg-gray-300" />
 
             {/* 상태 필터 */}
-            {['all', 'new', 'reviewing', 'ordered', 'purchased', 'settled', 'rejected'].map(s => (
+            {['all', 'new', 'reviewing', 'ordered', 'settled', 'rejected'].map(s => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
@@ -607,7 +606,7 @@ export default function AdminPage() {
           {selectedIds.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mt-3 flex items-center gap-3 flex-wrap">
               <span className="text-sm font-semibold text-[#0A67A6]">{selectedIds.length}건 선택됨</span>
-              {(['reviewing', 'ordered', 'purchased', 'settled'] as Status[]).map(s => (
+              {(['reviewing', 'ordered', 'settled'] as Status[]).map(s => (
                 <button
                   key={s}
                   onClick={() => handleBulkStatus(s)}
@@ -876,7 +875,7 @@ export default function AdminPage() {
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 border-b">
                     <tr>
-                      {['접수번호', '접수일', '카테고리', '물품명', '요청자', '구입처', '금액', '상태'].map(h => (
+                      {['접수번호', '카테고리', '물품명', '단가', '수량', '배송비', '구입금액', '상태'].map(h => (
                         <th key={h} className="px-3 py-2 text-left text-gray-600 font-semibold text-xs">{h}</th>
                       ))}
                     </tr>
@@ -885,12 +884,20 @@ export default function AdminPage() {
                     {monthlyData.map(r => (
                       <tr key={r.id} className="border-b hover:bg-gray-50">
                         <td className="px-3 py-2 font-mono text-xs">{r.receipt_number}</td>
-                        <td className="px-3 py-2 text-xs">{r.created_at.slice(0,10)}</td>
                         <td className="px-3 py-2 text-xs">{r.category}</td>
                         <td className="px-3 py-2">{r.item_name}</td>
-                        <td className="px-3 py-2 text-xs">{r.requester_name}</td>
-                        <td className="px-3 py-2 text-xs">{r.vendor || '-'}</td>
-                        <td className="px-3 py-2 text-xs">{r.amount ? r.amount.toLocaleString() + '원' : '-'}</td>
+                        <td className="px-3 py-2 text-xs text-right tabular-nums">
+                          {r.unit_price != null ? r.unit_price.toLocaleString() : '-'}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-right tabular-nums">
+                          {(r.purchase_quantity ?? r.quantity) != null ? (r.purchase_quantity ?? r.quantity) : '-'}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-right tabular-nums">
+                          {r.shipping_fee != null ? r.shipping_fee.toLocaleString() : '-'}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-right tabular-nums font-semibold">
+                          {r.amount != null ? r.amount.toLocaleString() : '-'}
+                        </td>
                         <td className="px-3 py-2">
                           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_COLOR[r.status]}`}>
                             {STATUS_LABEL[r.status]}
@@ -1047,7 +1054,7 @@ export default function AdminPage() {
             <h3 className="text-base font-bold text-gray-800 mb-1">구매월 이관</h3>
             <p className="text-xs text-gray-500 mb-4">
               선택된 {selectedIds.length}건의 구매예정월을 변경합니다.<br />
-              <span className="text-amber-600 font-medium">구입완료·정산완료 상태는 자동으로 건너뜁니다.</span>
+              <span className="text-amber-600 font-medium">정산완료 상태는 자동으로 건너뜁니다.</span>
             </p>
             <div className="flex gap-2 mb-5">
               <select
@@ -1094,7 +1101,7 @@ export default function AdminPage() {
               선택한 <span className="font-bold">{selectedIds.length}건</span>을 삭제하시겠습니까?
             </p>
             <p className="text-xs text-gray-400 mb-1">삭제 후 복구할 수 없습니다.</p>
-            <p className="text-xs text-amber-600 mb-5">구입완료·정산완료 상태는 자동으로 제외됩니다.</p>
+            <p className="text-xs text-amber-600 mb-5">정산완료 상태는 자동으로 제외됩니다.</p>
             <div className="flex gap-2">
               <button
                 onClick={() => setDeleteOpen(false)}

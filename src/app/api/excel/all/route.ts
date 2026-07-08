@@ -35,7 +35,7 @@ export async function GET() {
     ]
 
     const urgencyLabel: Record<string, string> = { normal: '일반', urgent: '긴급', relaxed: '여유' }
-    const statusLabel: Record<string, string>  = { new: '신규', reviewing: '검토중', purchased: '구입완료', settled: '정산완료', rejected: '반려' }
+    const statusLabel: Record<string, string>  = { new: '신규', reviewing: '검토중', ordered: '주문완료', settled: '정산완료', rejected: '반려' }
 
     ws.getRow(1).eachCell(cell => {
       cell.font      = { bold: true }

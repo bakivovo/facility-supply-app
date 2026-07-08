@@ -1,5 +1,5 @@
 export type Urgency = 'normal' | 'urgent' | 'relaxed'
-export type Status = 'new' | 'reviewing' | 'ordered' | 'purchased' | 'settled' | 'rejected'
+export type Status = 'new' | 'reviewing' | 'ordered' | 'settled' | 'rejected'
 
 export interface Request {
   id: string
@@ -26,6 +26,7 @@ export interface Request {
   purchase_month: string | null
   delivery_photo_urls: string[] | null
   receipt_photo_urls: ReceiptPhoto[] | null
+  delivery_receipt_photo_urls: string[] | null
   created_at: string
   updated_at: string
 }
@@ -52,18 +53,16 @@ export const STATUS_LABEL: Record<Status, string> = {
   new: '신규',
   reviewing: '검토중',
   ordered: '주문완료',
-  purchased: '구입완료',
   settled: '정산완료',
   rejected: '반려',
 }
 
 export const STATUS_COLOR: Record<Status, string> = {
-  new:       'bg-green-100 text-green-700',               // 신규: 초록 계열
-  reviewing: 'bg-orange-100 text-orange-700',             // 검토중: 주황 계열
-  ordered:   'bg-purple-100 text-purple-700',             // 주문완료: 보라 계열
-  purchased: 'bg-[#0A67A6]/20 text-[#0A67A6]',          // DMU Blue (중)
-  settled:   'bg-[#EDE900] text-[#3a3800]',              // DMU Yellow (진)
-  rejected:  'bg-red-100 text-red-700',                  // 반려: 빨간색 유지
+  new:       'bg-green-100 text-green-700',
+  reviewing: 'bg-orange-100 text-orange-700',
+  ordered:   'bg-purple-100 text-purple-700',
+  settled:   'bg-[#EDE900] text-[#3a3800]',
+  rejected:  'bg-red-100 text-red-700',
 }
 
 export const URGENCY_LABEL: Record<Urgency, string> = {
@@ -83,8 +82,7 @@ export const UNITS = ['개', '세트', '롤', 'm', 'kg', 'L', '박스', '기타'
 export const STATUS_FLOW: Record<Status, Status | null> = {
   new: 'reviewing',
   reviewing: 'ordered',
-  ordered: 'purchased',
-  purchased: 'settled',
+  ordered: 'settled',
   settled: null,
   rejected: null,
 }
@@ -92,8 +90,7 @@ export const STATUS_FLOW: Record<Status, Status | null> = {
 export const NEXT_STATUS_LABEL: Record<Status, string> = {
   new: '검토중으로 변경',
   reviewing: '주문완료로 변경',
-  ordered: '구입완료로 변경',
-  purchased: '정산완료로 변경',
+  ordered: '정산완료로 변경',
   settled: '',
   rejected: '',
 }

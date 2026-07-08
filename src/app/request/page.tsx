@@ -525,7 +525,7 @@ export default function RequestPage() {
                 </div>
               ) : (
                 filteredLookupResults.map((r: any) => {
-                  const isPurchased = r.status === 'purchased' || r.status === 'settled'
+                  const isPurchased = r.status === 'ordered' || r.status === 'settled'
                   return (
                     <div key={r.receipt_number} className="bg-white rounded-xl p-4" style={{ border: '0.5px solid #E5E7EB', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
                       {/* 상단: 접수번호 + 상태 배지 */}

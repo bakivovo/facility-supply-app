@@ -12,7 +12,7 @@ export async function GET() {
   const stats = {
     new: 0,
     reviewing: 0,
-    purchased: 0,
+    ordered: 0,
     settled_purchase: 0,
     settled_shipping: 0,
     settled_total: 0,
@@ -21,7 +21,7 @@ export async function GET() {
   for (const r of all || []) {
     if (r.status === 'new') stats.new++
     else if (r.status === 'reviewing') stats.reviewing++
-    else if (r.status === 'purchased') stats.purchased++
+    else if (r.status === 'ordered') stats.ordered++
 
     if (r.status === 'settled') {
       const pd = r.purchase_date ? new Date(r.purchase_date) : null
