@@ -23,73 +23,64 @@ async function safeJson(res: Response): Promise<{ ok: boolean; data: any }> {
   }
 }
 
-// ─── 영수증 카드 드롭존 ───
-interface ReceiptCardProps {
-  index: number; label: string; url?: string
-  onLabelChange: (label: string) => void
-  onFileDrop: (file: File, previewUrl: string) => void
-  onRemove: () => void; onRemovePhoto: () => void
+// ─── 사진 컬럼 (라벨 + 드롭존 + 썸네일 그리드) ───
+interface PhotoColumnProps {
+  label: string
+  items: Array<{ url: string }>
+  editable: boolean
+  onDropFiles: (files: File[]) => void
+  onRemove: (index: number) => void
 }
 
-function ReceiptDropzoneCard({ index, label, url, onLabelChange, onFileDrop, onRemove, onRemovePhoto }: ReceiptCardProps) {
+function PhotoColumn({ label, items, editable, onDropFiles, onRemove }: PhotoColumnProps) {
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    const file = acceptedFiles[0]; if (!file) return
-    onFileDrop(file, URL.createObjectURL(file))
-  }, [onFileDrop])
+    if (acceptedFiles.length > 0) onDropFiles(acceptedFiles)
+  }, [onDropFiles])
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop, accept: { 'image/*': [] }, multiple: false, noClick: !!url })
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { 'image/*': [] },
+    multiple: true,
+    disabled: !editable,
+  })
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-2">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-400 font-medium w-5 shrink-0">{index + 1}</span>
-        <input type="text" value={label} onChange={e => onLabelChange(e.target.value)}
-          className="flex-1 border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
-        <button type="button" onClick={onRemove} className="text-gray-300 hover:text-red-400 text-base leading-none" title="삭제">×</button>
-      </div>
-      <div {...getRootProps()} style={{ minHeight: '96px' }}
-        className={`relative rounded-lg border-2 border-dashed transition cursor-pointer ${isDragActive ? 'border-blue-500 bg-blue-50' : url ? 'border-gray-200 bg-gray-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}`}>
-        <input {...getInputProps()} />
-        {url ? (
-          <div className="flex items-center gap-3 p-2">
-            <div className="relative group shrink-0">
-              <a href={url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>
-                <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border" />
+    <div className="min-w-0">
+      <p className="text-xs font-semibold text-gray-600 mb-1.5">{label}</p>
+
+      {editable && (
+        <div
+          {...getRootProps()}
+          className={`border-2 border-dashed rounded-lg px-2 py-3 text-center cursor-pointer transition mb-1.5 ${
+            isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/40'
+          }`}
+        >
+          <input {...getInputProps()} />
+          <p className="text-[11px] text-gray-400 leading-tight">
+            {isDragActive ? '여기에 놓으세요' : '클릭 또는 드래그'}
+          </p>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="grid grid-cols-3 gap-1">
+          {items.map((item, i) => (
+            <div key={i} className="relative aspect-square rounded border overflow-hidden group bg-white">
+              <a href={item.url} target="_blank" rel="noreferrer">
+                <img src={item.url} alt="" className="w-full h-full object-cover" />
               </a>
-              <button type="button" onClick={e => { e.stopPropagation(); onRemovePhoto() }}
-                className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/50 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition hover:bg-red-500" title="사진 삭제">×</button>
+              {editable && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(i)}
+                  className="absolute top-0.5 right-0.5 w-4 h-4 bg-black/50 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition hover:bg-red-500"
+                  title="사진 삭제"
+                >×</button>
+              )}
             </div>
-            <div className="flex flex-col gap-1">
-              <p className="text-xs text-gray-500">사진이 선택되었습니다.</p>
-              <label className="cursor-pointer text-xs text-blue-600 hover:underline">다시 선택
-                <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onFileDrop(f, URL.createObjectURL(f)) }} />
-              </label>
-              <p className="text-xs text-gray-400">또는 사진을 드래그</p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full py-4 gap-1">
-            <span className="text-2xl text-gray-300">📄</span>
-            <p className="text-xs text-gray-400">{isDragActive ? '여기에 놓으세요' : '클릭하거나 사진을 드래그'}</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── 읽기 전용 사진 그리드 ───
-function ReadOnlyPhotoGrid({ urls }: { urls: string[] }) {
-  if (urls.length === 0) return null
-  return (
-    <div className="grid grid-cols-6 gap-1">
-      {urls.map((url, i) => (
-        <a key={i} href={url} target="_blank" rel="noreferrer">
-          <div className="aspect-square rounded border overflow-hidden">
-            <img src={url} alt="" className="w-full h-full object-cover" />
-          </div>
-        </a>
-      ))}
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -118,13 +109,11 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
   const [deliveryItems, setDeliveryItems] = useState<Array<{ url: string; file?: File }>>(
     (request.delivery_photo_urls || []).map(url => ({ url }))
   )
-  // 영수증 사진
+  // 물건 영수증 사진 (label 포함 구조 유지 — 기존 데이터 호환)
   const [receiptPhotos, setReceiptPhotos] = useState<Array<{ label: string; file?: File; url?: string }>>(
-    request.receipt_photo_urls && (request.receipt_photo_urls as ReceiptPhoto[]).length > 0
-      ? (request.receipt_photo_urls as ReceiptPhoto[]).map(r => ({ label: r.label, url: r.url }))
-      : [{ label: '물건 영수증' }, { label: '배송료 영수증' }]
+    ((request.receipt_photo_urls as ReceiptPhoto[]) || []).map(r => ({ label: r.label, url: r.url }))
   )
-  // 배송비 영수증 사진
+  // 배송료 영수증 사진
   const [deliveryReceiptItems, setDeliveryReceiptItems] = useState<Array<{ url: string; file?: File }>>(
     (request.delivery_receipt_photo_urls || []).map(url => ({ url }))
   )
@@ -137,20 +126,6 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
   const isSettled = request.status === 'settled'
   const isOrdered = request.status === 'ordered'
   const showPhotoSection = isOrdered || isSettled
-
-  // 드롭존 — 납품 사진
-  const onDropDelivery = useCallback((acceptedFiles: File[]) => {
-    setDeliveryItems(prev => [...prev, ...acceptedFiles.map(f => ({ url: URL.createObjectURL(f), file: f }))])
-  }, [])
-  const { getRootProps: getDeliveryRootProps, getInputProps: getDeliveryInputProps, isDragActive: isDeliveryDrag } =
-    useDropzone({ onDrop: onDropDelivery, accept: { 'image/*': [] }, multiple: true })
-
-  // 드롭존 — 배송비 영수증
-  const onDropDeliveryReceipt = useCallback((acceptedFiles: File[]) => {
-    setDeliveryReceiptItems(prev => [...prev, ...acceptedFiles.map(f => ({ url: URL.createObjectURL(f), file: f }))])
-  }, [])
-  const { getRootProps: getDeliveryReceiptRootProps, getInputProps: getDeliveryReceiptInputProps, isDragActive: isDeliveryReceiptDrag } =
-    useDropzone({ onDrop: onDropDeliveryReceipt, accept: { 'image/*': [] }, multiple: true })
 
   // ─── 저장 ───
   const handleSave = async () => {
@@ -166,7 +141,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       }
       const finalDelivery = [...keptDelivery, ...newDelivery]
 
-      // 영수증 사진
+      // 물건 영수증
       const origReceipt = ((request.receipt_photo_urls as ReceiptPhoto[]) || []).map(r => r.url)
       const keptReceipt = receiptPhotos.filter(rp => rp.url && !rp.file).map(rp => rp.url!)
       await Promise.all(origReceipt.filter(u => !keptReceipt.includes(u)).map(u => deleteFromStorage(u, 'receipt-photos')))
@@ -176,7 +151,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         else if (rp.url) finalReceipt.push({ label: rp.label, url: rp.url })
       }
 
-      // 배송비 영수증 사진
+      // 배송료 영수증
       const origDR = request.delivery_receipt_photo_urls || []
       const keptDR = deliveryReceiptItems.filter(i => !i.file).map(i => i.url)
       await Promise.all(origDR.filter(u => !keptDR.includes(u)).map(u => deleteFromStorage(u, 'delivery-receipt-photos')))
@@ -209,11 +184,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       if (!ok) throw new Error(data.error || '저장 실패')
 
       setDeliveryItems((data.data[0].delivery_photo_urls || []).map((u: string) => ({ url: u })))
-      setReceiptPhotos(
-        (data.data[0].receipt_photo_urls as ReceiptPhoto[] || []).length > 0
-          ? (data.data[0].receipt_photo_urls as ReceiptPhoto[]).map((r: ReceiptPhoto) => ({ label: r.label, url: r.url }))
-          : receiptPhotos.map(rp => ({ label: rp.label, url: rp.url }))
-      )
+      setReceiptPhotos(((data.data[0].receipt_photo_urls as ReceiptPhoto[]) || []).map((r: ReceiptPhoto) => ({ label: r.label, url: r.url })))
       setDeliveryReceiptItems((data.data[0].delivery_receipt_photo_urls || []).map((u: string) => ({ url: u })))
       setEditingField(null)
       onUpdate(data.data[0])
@@ -328,110 +299,137 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
     } catch (err: any) { alert('오류: ' + err.message) } finally { setExcelLoading(null) }
   }
 
-  // ─── 공통 input 클래스 ───
   const inputCls = isSettled
     ? 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed'
     : 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
+  const totalSum = calcAmount + (parseInt(shippingFee || '0') || 0)
+
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mt-1 mx-2 mb-2">
 
-      {/* ── 기본 정보 요약 ── */}
-      <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
+      {/* ══ 정산완료 배지 ══ */}
+      {isSettled && (
+        <div className="flex items-center gap-2 bg-[#EDE900] text-[#3a3800] rounded-lg px-3 py-2 mb-4 text-sm font-bold">
+          <span>🔒</span>
+          <span>정산완료 — 읽기 전용</span>
+        </div>
+      )}
 
-        {/* 요청자 */}
-        <div><span className="text-gray-500">요청자</span><br /><strong>{request.requester_name}</strong></div>
+      {/* ══ 상단 정보 영역: 2컬럼 ══ */}
+      <div className="grid grid-cols-2 gap-x-6 gap-y-0 text-sm">
 
-        {/* 날짜: 접수일 + 구입일 */}
-        <div className="space-y-1.5">
+        {/* 왼쪽 컬럼 */}
+        <div className="space-y-2.5">
           <div>
-            <span className="text-gray-500 text-xs">접수일</span><br />
-            <strong className="text-sm">{request.created_at.slice(0, 10)}</strong>
+            <p className="text-xs text-gray-500">요청자</p>
+            <strong>{request.requester_name}</strong>
           </div>
+
+          {/* 물품명 — 인라인 편집 */}
+          <div>
+            <p className="text-xs text-gray-500">물품명</p>
+            <div className="flex items-start gap-1">
+              {editingField === 'item_name' ? (
+                <input autoFocus value={editItemName} onChange={e => setEditItemName(e.target.value)}
+                  onBlur={() => setEditingField(null)}
+                  className="flex-1 border border-blue-400 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              ) : (
+                <strong className="flex-1">{editItemName}</strong>
+              )}
+              {!isSettled && editingField !== 'item_name' && (
+                <button type="button" onClick={() => setEditingField('item_name')}
+                  className="text-gray-300 hover:text-blue-500 text-sm leading-none transition shrink-0" title="물품명 편집">✏️</button>
+              )}
+            </div>
+          </div>
+
+          {/* 수량 + 규격 한 줄 */}
+          <div>
+            <p className="text-xs text-gray-500">수량 · 규격</p>
+            <div className="flex items-start gap-1">
+              {editingField === 'spec' ? (
+                <div className="flex-1 flex items-center gap-2">
+                  <strong className="shrink-0">{request.quantity} {request.unit}</strong>
+                  <input autoFocus value={editSpec} onChange={e => setEditSpec(e.target.value)}
+                    onBlur={() => setEditingField(null)} placeholder="규격 입력"
+                    className="flex-1 border border-blue-400 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              ) : (
+                <strong className="flex-1">
+                  {request.quantity} {request.unit}
+                  {editSpec
+                    ? <span className="text-gray-500 font-normal"> · {editSpec}</span>
+                    : <span className="text-gray-400 font-normal text-xs"> · 규격 미입력</span>}
+                </strong>
+              )}
+              {!isSettled && editingField !== 'spec' && (
+                <button type="button" onClick={() => setEditingField('spec')}
+                  className="text-gray-300 hover:text-blue-500 text-sm leading-none transition shrink-0" title="규격 편집">✏️</button>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs text-gray-500">용도/사유</p>
+            <strong>{request.purpose}</strong>
+          </div>
+
+          {request.purchase_link && (
+            <div>
+              <a href={request.purchase_link} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs break-all">
+                🔗 구입 참고 링크
+              </a>
+            </div>
+          )}
+        </div>
+
+        {/* 오른쪽 컬럼 */}
+        <div className="space-y-2.5">
+          <div>
+            <p className="text-xs text-gray-500">접수일</p>
+            <strong>{request.created_at.slice(0, 10)}</strong>
+          </div>
+
           {(isOrdered || isSettled) && (
             <div>
-              <span className="text-gray-500 text-xs">구입일</span><br />
+              <p className="text-xs text-gray-500">구입일</p>
               {isSettled ? (
-                <strong className="text-sm">{request.purchase_date || '-'}</strong>
+                <strong>{request.purchase_date || '-'}</strong>
               ) : (
                 <input
                   type="date"
                   value={purchaseDate}
                   onChange={e => setPurchaseDate(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mt-0.5"
+                  className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               )}
             </div>
           )}
-        </div>
 
-        {/* 물품명 — 인라인 편집 */}
-        <div className="col-span-2">
-          <div className="flex items-start gap-1">
-            <div className="flex-1">
-              <span className="text-gray-500 text-sm">물품명</span><br />
-              {editingField === 'item_name' ? (
-                <input autoFocus value={editItemName} onChange={e => setEditItemName(e.target.value)}
-                  onBlur={() => setEditingField(null)}
-                  className="w-full border border-blue-400 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 mt-0.5" />
-              ) : (
-                <strong>{editItemName}</strong>
-              )}
-            </div>
-            {!isSettled && (
-              <button type="button" onClick={() => setEditingField('item_name')}
-                className="text-gray-300 hover:text-blue-500 text-sm mt-5 leading-none transition" title="물품명 편집">✏️</button>
-            )}
+          <div>
+            <p className="text-xs text-gray-500">카테고리</p>
+            <strong>{request.category}</strong>
           </div>
         </div>
-
-        <div><span className="text-gray-500">수량</span><br /><strong>{request.quantity} {request.unit}</strong></div>
-
-        {/* 규격 — 인라인 편집 */}
-        <div className="col-span-2">
-          <div className="flex items-start gap-1">
-            <div className="flex-1">
-              <span className="text-gray-500 text-sm">규격</span><br />
-              {editingField === 'spec' ? (
-                <input autoFocus value={editSpec} onChange={e => setEditSpec(e.target.value)}
-                  onBlur={() => setEditingField(null)} placeholder="규격 입력"
-                  className="w-full border border-blue-400 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 mt-0.5" />
-              ) : (
-                <strong>{editSpec || <span className="text-gray-400 font-normal text-xs">미입력</span>}</strong>
-              )}
-            </div>
-            {!isSettled && (
-              <button type="button" onClick={() => setEditingField('spec')}
-                className="text-gray-300 hover:text-blue-500 text-sm mt-5 leading-none transition" title="규격 편집">✏️</button>
-            )}
-          </div>
-        </div>
-
-        <div className="col-span-2"><span className="text-gray-500">용도/사유</span><br /><strong>{request.purpose}</strong></div>
-
-        {request.purchase_link && (
-          <div className="col-span-2">
-            <a href={request.purchase_link} target="_blank" rel="noreferrer" className="text-blue-600 underline text-xs break-all">
-              🔗 구입 참고 링크
-            </a>
-          </div>
-        )}
-        {request.request_photos && request.request_photos.length > 0 && (
-          <div className="col-span-2">
-            <p className="text-gray-500 text-xs mb-1">첨부 사진</p>
-            <div className="flex gap-2 flex-wrap">
-              {request.request_photos.map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noreferrer">
-                  <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border" />
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ── 상태 흐름 ── */}
-      <div className="flex items-center gap-1 mb-4 overflow-x-auto">
+      {/* 요청 첨부 사진 */}
+      {request.request_photos && request.request_photos.length > 0 && (
+        <div className="mt-3">
+          <p className="text-xs text-gray-500 mb-1">첨부 사진</p>
+          <div className="flex gap-2 flex-wrap">
+            {request.request_photos.map((url, i) => (
+              <a key={i} href={url} target="_blank" rel="noreferrer">
+                <img src={url} alt="" className="w-16 h-16 object-cover rounded-lg border" />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ══ 상태 흐름 ══ */}
+      <div className="flex items-center gap-1 mt-4 pt-4 border-t border-gray-200 overflow-x-auto">
         {(['new', 'reviewing', 'ordered', 'settled'] as const).map((s, i) => (
           <div key={s} className="flex items-center gap-1 flex-shrink-0">
             <span className={`px-2 py-1 rounded text-xs font-semibold ${
@@ -444,17 +442,12 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         ))}
       </div>
 
-      {/* ── 구입 정보 입력 폼 (반려 제외) ── */}
+      {/* ══ 구입 정보 영역 ══ */}
       {request.status !== 'rejected' && (
-        <div className="space-y-3 mb-4">
-          {isSettled && (
-            <p className="text-xs text-gray-400 flex items-center gap-1">
-              <span>🔒</span> 정산완료 — 읽기 전용
-            </p>
-          )}
+        <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
 
-          <div className="grid grid-cols-2 gap-3">
-            {/* 구입처 */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            {/* 왼쪽: 구입처, 구입수량 */}
             <div>
               <label className="text-xs text-gray-600 font-medium mb-1 block">구입처</label>
               <input list="vendor-list" value={vendorInput} onChange={e => setVendorInput(e.target.value)}
@@ -466,14 +459,14 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               )}
             </div>
 
-            {/* 단가 */}
+            {/* 오른쪽: 단가 */}
             <div>
               <label className="text-xs text-gray-600 font-medium mb-1 block">단가 (원)</label>
               <input type="number" value={unitPrice} onChange={e => setUnitPrice(e.target.value)}
                 disabled={isSettled} placeholder="0" className={inputCls} />
             </div>
 
-            {/* 구입수량 */}
+            {/* 왼쪽: 구입수량 */}
             <div>
               <label className="text-xs text-gray-600 font-medium mb-1 block">
                 구입수량
@@ -485,26 +478,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
                 disabled={isSettled} min="1" placeholder="1" className={inputCls} />
             </div>
 
-            {/* 구입금액 자동계산 */}
-            {!isSettled && calcAmount > 0 && (
-              <div className="col-span-2">
-                <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm flex items-center gap-2">
-                  <span className="text-gray-500">구입금액:</span>
-                  <span className="font-semibold text-gray-800">{calcAmount.toLocaleString()}원</span>
-                  <span className="text-gray-400 text-xs">({parseInt(unitPrice || '0').toLocaleString()} × {parseInt(purchaseQty || '0')})</span>
-                </div>
-              </div>
-            )}
-            {isSettled && request.amount != null && (
-              <div className="col-span-2">
-                <div className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-sm flex items-center gap-2">
-                  <span className="text-gray-500">구입금액:</span>
-                  <span className="font-semibold text-gray-800">{request.amount.toLocaleString()}원</span>
-                </div>
-              </div>
-            )}
-
-            {/* 배송비 */}
+            {/* 오른쪽: 배송비 */}
             <div>
               <label className="text-xs text-gray-600 font-medium mb-1 block">
                 배송비 (원) {!isSettled && <span className="text-gray-400 font-normal">선택</span>}
@@ -512,148 +486,98 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               <input type="number" value={shippingFee} onChange={e => setShippingFee(e.target.value)}
                 disabled={isSettled} placeholder="0" className={inputCls} />
             </div>
-
-            {/* 합계 */}
-            {!isSettled && (calcAmount > 0 || shippingFee) && (
-              <div className="col-span-2 flex justify-end">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm">
-                  <span className="text-gray-500">합계: </span>
-                  <span className="font-bold text-blue-700">
-                    {(calcAmount + (parseInt(shippingFee || '0') || 0)).toLocaleString()}원
-                  </span>
-                  {calcAmount > 0 && shippingFee && (
-                    <span className="text-gray-400 text-xs ml-2">
-                      (구입 {calcAmount.toLocaleString()} + 배송 {parseInt(shippingFee).toLocaleString()})
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-            {isSettled && request.amount != null && request.shipping_fee != null && (
-              <div className="col-span-2 flex justify-end">
-                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm">
-                  <span className="text-gray-500">합계: </span>
-                  <span className="font-bold text-blue-700">
-                    {(request.amount + request.shipping_fee).toLocaleString()}원
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* 메모 */}
-            <div className="col-span-2">
-              <label className="text-xs text-gray-600 font-medium mb-1 block">메모</label>
-              <input type="text" value={memo} onChange={e => setMemo(e.target.value)}
-                disabled={isSettled} placeholder="자유 입력" className={inputCls} />
-            </div>
           </div>
 
-          {/* ── 사진 섹션 ── */}
-          {showPhotoSection && (
-            <div className="space-y-4 pt-3 border-t border-gray-200">
-
-              {isSettled ? (
-                /* 정산완료: 읽기 전용 사진만 */
-                <>
-                  {deliveryItems.length > 0 && (
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700 mb-2">① 납품완료 사진</p>
-                      <ReadOnlyPhotoGrid urls={deliveryItems.map(i => i.url)} />
-                    </div>
-                  )}
-                  {receiptPhotos.filter(rp => rp.url).length > 0 && (
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700 mb-2">② 영수증 사진</p>
-                      <div className="flex flex-wrap gap-3">
-                        {receiptPhotos.filter(rp => rp.url).map((rp, i) => (
-                          <div key={i} className="flex flex-col items-center gap-1">
-                            <a href={rp.url} target="_blank" rel="noreferrer">
-                              <img src={rp.url} alt={rp.label} className="w-16 h-16 object-cover rounded-lg border" />
-                            </a>
-                            <span className="text-xs text-gray-500 text-center max-w-[64px] leading-tight">{rp.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {deliveryReceiptItems.length > 0 && (
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700 mb-2">③ 배송비 영수증 사진</p>
-                      <ReadOnlyPhotoGrid urls={deliveryReceiptItems.map(i => i.url)} />
-                    </div>
-                  )}
-                </>
-              ) : (
-                /* 주문완료: 드롭존 포함 전체 업로드 UI */
-                <>
-                  {/* ① 납품완료 사진 */}
-                  <div>
-                    <p className="text-sm font-semibold text-gray-700 mb-2">① 납품완료 사진</p>
-                    <div {...getDeliveryRootProps()}
-                      className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition ${isDeliveryDrag ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}>
-                      <input {...getDeliveryInputProps()} />
-                      <p className="text-sm text-gray-500">{isDeliveryDrag ? '여기에 놓으세요' : '클릭하거나 사진을 드래그하여 업로드'}</p>
-                    </div>
-                    {deliveryItems.length > 0 && (
-                      <div className="grid grid-cols-6 gap-1 mt-2">
-                        {deliveryItems.map((item, i) => (
-                          <div key={i} className="relative aspect-square rounded border overflow-hidden group">
-                            <img src={item.url} alt="" className="w-full h-full object-cover" />
-                            <button type="button" onClick={() => setDeliveryItems(prev => prev.filter((_, idx) => idx !== i))}
-                              className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/50 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition hover:bg-red-500" title="사진 삭제">×</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* ② 영수증 사진 */}
-                  <div>
-                    <p className="text-sm font-semibold text-gray-700 mb-2">② 영수증 사진</p>
-                    <div className="space-y-2">
-                      {receiptPhotos.map((rp, i) => (
-                        <ReceiptDropzoneCard key={i} index={i} label={rp.label} url={rp.url}
-                          onLabelChange={label => setReceiptPhotos(prev => { const u = [...prev]; u[i] = { ...u[i], label }; return u })}
-                          onFileDrop={(file, url) => setReceiptPhotos(prev => { const u = [...prev]; u[i] = { ...u[i], file, url }; return u })}
-                          onRemove={() => setReceiptPhotos(prev => prev.filter((_, idx) => idx !== i))}
-                          onRemovePhoto={() => setReceiptPhotos(prev => { const u = [...prev]; u[i] = { label: u[i].label }; return u })}
-                        />
-                      ))}
-                      <button type="button" onClick={() => setReceiptPhotos(prev => [...prev, { label: `영수증 ${prev.length + 1}` }])}
-                        className="text-xs text-blue-600 hover:underline mt-1">+ 영수증 추가</button>
-                    </div>
-                  </div>
-
-                  {/* ③ 배송비 영수증 사진 */}
-                  <div>
-                    <p className="text-sm font-semibold text-gray-700 mb-2">③ 배송비 영수증 사진</p>
-                    <div {...getDeliveryReceiptRootProps()}
-                      className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition ${isDeliveryReceiptDrag ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'}`}>
-                      <input {...getDeliveryReceiptInputProps()} />
-                      <p className="text-sm text-gray-500">{isDeliveryReceiptDrag ? '여기에 놓으세요' : '클릭하거나 사진을 드래그하여 업로드'}</p>
-                    </div>
-                    {deliveryReceiptItems.length > 0 && (
-                      <div className="grid grid-cols-6 gap-1 mt-2">
-                        {deliveryReceiptItems.map((item, i) => (
-                          <div key={i} className="relative aspect-square rounded border overflow-hidden group">
-                            <img src={item.url} alt="" className="w-full h-full object-cover" />
-                            <button type="button" onClick={() => setDeliveryReceiptItems(prev => prev.filter((_, idx) => idx !== i))}
-                              className="absolute top-0.5 right-0.5 w-5 h-5 bg-black/50 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition hover:bg-red-500" title="사진 삭제">×</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+          {/* 구입금액 · 합계 — 한 줄 */}
+          {(calcAmount > 0 || (isSettled && request.amount != null)) && (
+            <div className="flex items-center gap-4 bg-blue-50 border border-blue-100 rounded-lg px-4 py-2.5 text-sm">
+              <div>
+                <span className="text-gray-500">구입금액 </span>
+                <span className="font-semibold text-gray-800">
+                  {(isSettled ? (request.amount ?? 0) : calcAmount).toLocaleString()}원
+                </span>
+                {!isSettled && calcAmount > 0 && (
+                  <span className="text-gray-400 text-xs ml-1">
+                    ({parseInt(unitPrice || '0').toLocaleString()} × {parseInt(purchaseQty || '0')})
+                  </span>
+                )}
+              </div>
+              <div className="w-px h-4 bg-blue-200" />
+              <div>
+                <span className="text-gray-500">합계 </span>
+                <span className="font-bold text-blue-700">
+                  {(isSettled
+                    ? (request.amount ?? 0) + (request.shipping_fee ?? 0)
+                    : totalSum
+                  ).toLocaleString()}원
+                </span>
+              </div>
             </div>
           )}
+
+          {/* 메모 — 전체 너비 */}
+          <div>
+            <label className="text-xs text-gray-600 font-medium mb-1 block">메모</label>
+            <input type="text" value={memo} onChange={e => setMemo(e.target.value)}
+              disabled={isSettled} placeholder="자유 입력" className={inputCls} />
+          </div>
         </div>
       )}
 
-      {/* ── 구글시트 연동 결과 ── */}
+      {/* ══ 사진 영역: 3칸 가로 배치 ══ */}
+      {request.status !== 'rejected' && showPhotoSection && (() => {
+        const columns = [
+          {
+            label: '납품완료 사진',
+            items: deliveryItems.map(i => ({ url: i.url })),
+            onDropFiles: (files: File[]) =>
+              setDeliveryItems(prev => [...prev, ...files.map(f => ({ url: URL.createObjectURL(f), file: f }))]),
+            onRemove: (idx: number) => setDeliveryItems(prev => prev.filter((_, i) => i !== idx)),
+          },
+          {
+            label: '물건 영수증',
+            items: receiptPhotos.filter(rp => rp.url).map(rp => ({ url: rp.url! })),
+            onDropFiles: (files: File[]) =>
+              setReceiptPhotos(prev => [...prev, ...files.map(f => ({ label: '물건 영수증', url: URL.createObjectURL(f), file: f }))]),
+            onRemove: (idx: number) => {
+              setReceiptPhotos(prev => {
+                const withUrl = prev.filter(rp => rp.url)
+                const target = withUrl[idx]
+                return prev.filter(rp => rp !== target)
+              })
+            },
+          },
+          {
+            label: '배송료 영수증',
+            items: deliveryReceiptItems.map(i => ({ url: i.url })),
+            onDropFiles: (files: File[]) =>
+              setDeliveryReceiptItems(prev => [...prev, ...files.map(f => ({ url: URL.createObjectURL(f), file: f }))]),
+            onRemove: (idx: number) => setDeliveryReceiptItems(prev => prev.filter((_, i) => i !== idx)),
+          },
+        ]
+        const visible = isSettled ? columns.filter(c => c.items.length > 0) : columns
+        if (visible.length === 0) return null
+        return (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="grid grid-cols-3 gap-3">
+              {visible.map(col => (
+                <PhotoColumn
+                  key={col.label}
+                  label={col.label}
+                  items={col.items}
+                  editable={!isSettled}
+                  onDropFiles={col.onDropFiles}
+                  onRemove={col.onRemove}
+                />
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ══ 구글시트 연동 결과 ══ */}
       {sheetResult && (
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mb-2 ${
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mt-4 ${
           sheetResult === 'matched' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
         }`}>
           <span>{sheetResult === 'matched' ? '✓' : '!'}</span>
@@ -661,9 +585,9 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         </div>
       )}
 
-      {/* ── 정산완료 엑셀 다운로드 ── */}
+      {/* ══ 정산완료 엑셀 다운로드 ══ */}
       {isSettled && (
-        <div className="flex gap-2 mb-4 flex-wrap">
+        <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200 flex-wrap">
           {request.delivery_photo_urls && request.delivery_photo_urls.length > 0 && (
             <button onClick={() => handleExcel('delivery')} disabled={excelLoading === 'delivery'}
               className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition disabled:opacity-60">
@@ -679,9 +603,9 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         </div>
       )}
 
-      {/* ── 버튼 영역 ── */}
+      {/* ══ 버튼 영역 ══ */}
       {request.status !== 'rejected' && (
-        <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex gap-2 flex-wrap items-center mt-4 pt-4 border-t border-gray-200">
           <button onClick={handleSave} disabled={saveStatus === 'saving' || loading}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition disabled:opacity-60">
             {saveStatus === 'saving' ? '저장 중...' : '저장'}
@@ -723,7 +647,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       )}
 
       {request.status === 'rejected' && (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mt-4">
           <p className="text-sm font-semibold text-red-700">반려 처리됨</p>
           {request.reject_reason && <p className="text-sm text-red-600 mt-1">사유: {request.reject_reason}</p>}
         </div>
