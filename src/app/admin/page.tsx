@@ -298,7 +298,11 @@ export default function AdminPage() {
     setMonthlyLoading(true)
     const res = await fetch(`/api/admin/requests?status=all`)
     const data = await res.json()
-    const filtered = (data.data || []).filter((r: Request) => r.created_at.startsWith(monthInput))
+    // purchase_month 기준 (없으면 created_at 월로 fallback) — 이관된 건 포함
+    const filtered = (data.data || []).filter((r: Request) => {
+      const ym = r.purchase_month || r.created_at.slice(0, 7)
+      return ym === monthInput
+    })
     setMonthlyData(filtered)
     setMonthlyLoading(false)
   }

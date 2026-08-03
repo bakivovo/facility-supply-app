@@ -11,13 +11,19 @@ export async function GET(request: NextRequest) {
 
     const [year, mon] = month.split('-')
 
+    // 다음 달 1일 (created_at 범위의 상한 — '2026-06-31'처럼 존재하지 않는 날짜를 피하기 위해 lt 사용)
+    const y = parseInt(year, 10), m = parseInt(mon, 10)
+    const nextMonthStr = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
+    const thisMonthStr = `${year}-${mon}-01`
+
     const supabase = getSupabaseAdmin()
-    // purchase_month 기준으로 집계 (이관된 건은 이관된 월로 포함)
+    // purchase_month 기준으로 집계 (이관된 건은 이관된 월로 포함).
+    // purchase_month가 NULL인 건은 created_at이 해당 월에 속하면 포함 (fallback)
     const { data, error } = await supabase
       .from('requests')
       .select('*')
-      .eq('purchase_month', month)
       .eq('status', 'settled')
+      .or(`purchase_month.eq.${month},and(purchase_month.is.null,created_at.gte.${thisMonthStr},created_at.lt.${nextMonthStr})`)
       .order('purchase_date', { ascending: true })
 
     if (error) return Response.json({ error: error.message }, { status: 500 })
