@@ -300,6 +300,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           receipt_number: request.receipt_number, item_name: request.item_name,
           delivery_photo_urls: type === 'delivery' ? (request.delivery_photo_urls || []) : undefined,
           receipt_photo_urls: type === 'receipt' ? (request.receipt_photo_urls || []) : undefined,
+          delivery_receipt_photo_urls: type === 'receipt' ? (request.delivery_receipt_photo_urls || []) : undefined,
         }),
       })
       if (!res.ok) { const { data } = await safeJson(res); throw new Error(data.error || '엑셀 생성 실패') }
@@ -608,7 +609,8 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               {excelLoading === 'delivery' ? '생성 중...' : '📥 납품사진 엑셀'}
             </button>
           )}
-          {request.receipt_photo_urls && (request.receipt_photo_urls as ReceiptPhoto[]).length > 0 && (
+          {((request.receipt_photo_urls && (request.receipt_photo_urls as ReceiptPhoto[]).length > 0) ||
+            (request.delivery_receipt_photo_urls && request.delivery_receipt_photo_urls.length > 0)) && (
             <button onClick={() => handleExcel('receipt')} disabled={excelLoading === 'receipt'}
               className="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700 transition disabled:opacity-60">
               {excelLoading === 'receipt' ? '생성 중...' : '📥 영수증 엑셀'}

@@ -2,9 +2,10 @@
  * 정산내역 엑셀 공유 빌더
  *
  * 시트 구성:
- *   [1] 정산내역  — 9열 테이블 (접수번호/물품명/구입처/구입일/수량/단가/구입금액/배송비/합계)
- *   [2] 납품사진  — 항목별 구분 헤더 + 납품완료 사진 2열 그리드
- *   [3] 영수증    — 항목별 구분 헤더 + 영수증 사진 세로 전체
+ *   [1] 정산내역     — 9열 테이블 (접수번호/물품명/구입처/구입일/수량/단가/구입금액/배송비/합계)
+ *   [2] 납품사진     — 항목별 구분 헤더 + 납품완료 사진 2열 그리드
+ *   [3] 영수증       — 항목별 구분 헤더 + 영수증(물건) 사진 세로 전체
+ *   [4] 배송비영수증 — 항목별 구분 헤더 + 배송비 영수증 사진 세로 전체
  *
  * 사용처:
  *   - /api/excel/monthly  (월별 정산 탭 → 엑셀 내보내기)
@@ -293,6 +294,85 @@ export async function buildSettlementWorkbook(
     // 항목 구분 여백
     ws3.getRow(rRow).height = 8
     rRow++
+  }
+
+  // ── 시트4: 배송비영수증 ──────────────────────
+  const ws4 = workbook.addWorksheet('배송비영수증')
+  ws4.getColumn(1).width = 90
+  ws4.getColumn(2).width = 15
+
+  let drRow = 1
+  for (const r of items) {
+    ws4.mergeCells(`A${drRow}:B${drRow}`)
+    const drHead = ws4.getCell(`A${drRow}`)
+    drHead.value     = `${r.receipt_number}  ·  ${r.item_name}`
+    drHead.font      = { bold: true, size: 11 }
+    drHead.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }
+    drHead.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }
+    ws4.getRow(drRow).height = 22
+    drRow++
+
+    const deliveryReceipts: string[] = r.delivery_receipt_photo_urls || []
+
+    if (deliveryReceipts.length === 0) {
+      ws4.mergeCells(`A${drRow}:B${drRow}`)
+      const noCell = ws4.getCell(`A${drRow}`)
+      noCell.value     = '사진 없음'
+      noCell.font      = { italic: true, size: 10, color: { argb: 'FF999999' } }
+      noCell.alignment = { horizontal: 'center', vertical: 'middle' }
+      ws4.getRow(drRow).height = 30
+      drRow++
+    } else {
+      const IMG_H = 40
+
+      for (let idx = 0; idx < deliveryReceipts.length; idx++) {
+        const url      = deliveryReceipts[idx]
+        const imgStart = drRow
+        const imgEnd   = drRow + IMG_H - 1
+        const capRow   = drRow + IMG_H
+
+        for (let rr = imgStart; rr <= imgEnd; rr++) {
+          ws4.getRow(rr).height = 15
+          ws4.getCell(`A${rr}`).border = {
+            top:    rr === imgStart ? { style: 'thin' } : undefined,
+            left:   { style: 'thin' },
+            right:  { style: 'thin' },
+            bottom: rr === imgEnd   ? { style: 'thin' } : undefined,
+          }
+        }
+
+        if (url) {
+          try {
+            const img = await fetchImageBuffer(url)
+            if (img) {
+              const imgId = workbook.addImage({ buffer: img.buffer, extension: img.ext as any })
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ;(ws4 as any).addImage(imgId, {
+                tl: { col: 0, row: imgStart - 1 },
+                br: { col: 1, row: imgEnd },
+                editAs: 'oneCell',
+              })
+            }
+          } catch {
+            // 이미지 삽입 실패 시 해당 칸만 건너뜀
+          }
+        }
+
+        // 캡션
+        ws4.mergeCells(`A${capRow}:B${capRow}`)
+        const capCell      = ws4.getCell(`A${capRow}`)
+        capCell.value      = `${r.item_name}  ·  ${r.receipt_number}  ·  배송비 영수증${deliveryReceipts.length > 1 ? ` ${idx + 1}` : ''}`
+        capCell.font       = { bold: true, size: 10 }
+        capCell.alignment  = { horizontal: 'center', vertical: 'middle' }
+        ws4.getRow(capRow).height = 22
+
+        drRow += IMG_H + 1
+      }
+    }
+
+    // 항목 구분 여백
+    ws4.getRow(drRow).height = 8
+    drRow++
   }
 
   return workbook

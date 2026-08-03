@@ -4,16 +4,26 @@ import ExcelJS from 'exceljs'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { receipt_number, item_name, receipt_photo_urls } = body
+    const { receipt_number, item_name, receipt_photo_urls, delivery_receipt_photo_urls } = body
 
     const workbook = new ExcelJS.Workbook()
     const today = new Date()
     const dateStr = `${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,'0')}.${String(today.getDate()).padStart(2,'0')}`
 
     const receipts: Array<{ label: string; url: string }> = receipt_photo_urls || []
+    const deliveryReceipts: string[] = delivery_receipt_photo_urls || []
 
-    for (let i = 0; i < Math.max(receipts.length, 1); i++) {
-      const receipt = receipts[i]
+    // 물건 영수증 + 배송비 영수증을 하나의 시트 목록으로 합침 (시트명 중복 방지를 위해 번호 부여)
+    const combined: Array<{ label: string; url: string }> = [
+      ...receipts,
+      ...deliveryReceipts.map((url, i) => ({
+        label: deliveryReceipts.length > 1 ? `배송비영수증_${i + 1}` : '배송비영수증',
+        url,
+      })),
+    ]
+
+    for (let i = 0; i < Math.max(combined.length, 1); i++) {
+      const receipt = combined[i]
       const ws = workbook.addWorksheet(receipt ? receipt.label : `영수증_${i + 1}`)
 
       // 열 너비
