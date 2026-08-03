@@ -2,10 +2,10 @@
  * 정산내역 엑셀 공유 빌더
  *
  * 시트 구성:
- *   [1] 정산내역     — 9열 테이블 (접수번호/물품명/구입처/구입일/수량/단가/구입금액/배송비/합계)
- *   [2] 납품사진     — 항목별 구분 헤더 + 납품완료 사진 2열 그리드
- *   [3] 영수증       — 항목별 구분 헤더 + 영수증(물건) 사진 세로 전체
- *   [4] 배송비영수증 — 항목별 구분 헤더 + 배송비 영수증 사진 세로 전체
+ *   [1] 정산내역 — 9열 테이블 (접수번호/물품명/구입처/구입일/수량/단가/구입금액/배송비/합계)
+ *   [2] 납품사진 — 항목별 구분 헤더 + 납품완료 사진 2열 그리드
+ *   [3] 영수증   — 항목별 구분 헤더 + "물건 영수증"·"배송비 영수증" 라벨 구분,
+ *                  각 라벨 아래 사진을 가로로 나란히 배치 (없는 라벨은 생략)
  *
  * 사용처:
  *   - /api/excel/monthly  (월별 정산 탭 → 엑셀 내보내기)
@@ -43,6 +43,90 @@ function applyHeaderStyle(cell: ExcelJS.Cell) {
   cell.fill  = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }
   cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
   cell.alignment = { horizontal: 'center', vertical: 'middle' }
+}
+
+// ── "영수증" 시트 전용: 라벨 + 사진 가로 배치 렌더링 ──
+const RECEIPT_IMG_MAIN_W = 90  // 이미지가 실제로 차지하는 열 너비 (기존과 동일)
+const RECEIPT_IMG_BUF_W  = 15  // 이미지 사이 여백용 보조 열 너비
+const RECEIPT_IMG_H      = 40  // 이미지가 차지하는 행 수 (기존과 동일)
+const RECEIPT_ROW_H      = 15  // 이미지 영역 각 행의 높이(px)
+
+// 사진 개수만큼 (본열+보조열) 쌍의 너비를 설정
+function setReceiptPhotoColumns(ws: ExcelJS.Worksheet, count: number) {
+  for (let i = 0; i < count; i++) {
+    ws.getColumn(i * 2 + 1).width = RECEIPT_IMG_MAIN_W
+    ws.getColumn(i * 2 + 2).width = RECEIPT_IMG_BUF_W
+  }
+}
+
+// 라벨 행 + 사진을 가로로 나란히 배치. urls가 비어있으면 아무것도 그리지 않고 startRow 그대로 반환
+async function renderReceiptSection(
+  workbook: ExcelJS.Workbook,
+  ws: ExcelJS.Worksheet,
+  startRow: number,
+  label: string,
+  urls: string[],
+  fetchImage: (url: string) => Promise<{ buffer: any; ext: string } | null>,
+): Promise<number> {
+  const validUrls = urls.filter(Boolean)
+  if (validUrls.length === 0) return startRow
+
+  setReceiptPhotoColumns(ws, validUrls.length)
+  const lastCol = validUrls.length * 2
+
+  // 라벨 행 (연한 회색 배경)
+  let row = startRow
+  ws.mergeCells(row, 1, row, lastCol)
+  const labelCell = ws.getCell(row, 1)
+  labelCell.value     = label
+  labelCell.font      = { bold: true, size: 10, color: { argb: 'FF666666' } }
+  labelCell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } }
+  labelCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }
+  ws.getRow(row).height = 20
+  row++
+
+  const imgStart = row
+  const imgEnd   = row + RECEIPT_IMG_H - 1
+  const capRow   = row + RECEIPT_IMG_H
+
+  for (let rr = imgStart; rr <= imgEnd; rr++) ws.getRow(rr).height = RECEIPT_ROW_H
+  ws.getRow(capRow).height = 22
+
+  for (let i = 0; i < validUrls.length; i++) {
+    const mainCol = i * 2 + 1
+    const bufCol  = i * 2 + 2
+
+    for (let rr = imgStart; rr <= capRow; rr++) {
+      const top    = rr === imgStart ? { style: 'thin' as const } : undefined
+      const bottom = rr === capRow   ? { style: 'thin' as const } : undefined
+      ws.getCell(rr, mainCol).border = { top, bottom, left: { style: 'thin' } }
+      ws.getCell(rr, bufCol).border  = { top, bottom, right: { style: 'thin' } }
+    }
+
+    try {
+      const img = await fetchImage(validUrls[i])
+      if (img) {
+        const imgId = workbook.addImage({ buffer: img.buffer, extension: img.ext as any })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(ws as any).addImage(imgId, {
+          tl: { col: mainCol - 1, row: imgStart - 1 },
+          br: { col: mainCol,     row: imgEnd },
+          editAs: 'oneCell',
+        })
+      }
+    } catch {
+      // 이미지 삽입 실패 시 해당 칸만 건너뜀
+    }
+
+    // 캡션
+    ws.mergeCells(capRow, mainCol, capRow, bufCol)
+    const capCell     = ws.getCell(capRow, mainCol)
+    capCell.value     = `${label}${validUrls.length > 1 ? ` ${i + 1}` : ''}`
+    capCell.font      = { size: 9, color: { argb: 'FF444444' } }
+    capCell.alignment = { horizontal: 'center', vertical: 'middle' }
+  }
+
+  return capRow + 1
 }
 
 // ────────────────────────────────────────────────
@@ -217,16 +301,21 @@ export async function buildSettlementWorkbook(
     dRow++
   }
 
-  // ── 시트3: 영수증 ────────────────────────────
+  // ── 시트3: 영수증 (물건 영수증 + 배송비 영수증, 항목 순서대로) ──
   const ws3 = workbook.addWorksheet('영수증')
   ws3.getColumn(1).width = 90
   ws3.getColumn(2).width = 15
 
   let rRow = 1
   for (const r of items) {
-    // 항목 헤더
-    ws3.mergeCells(`A${rRow}:B${rRow}`)
-    const rHead = ws3.getCell(`A${rRow}`)
+    const itemReceiptUrls: string[] = ((r.receipt_photo_urls as Array<{ url?: string }>) || [])
+      .map(rp => rp.url).filter((u): u is string => !!u)
+    const itemDeliveryReceiptUrls: string[] = (r.delivery_receipt_photo_urls || []).filter(Boolean)
+
+    // 항목 헤더 — 두 라벨 중 사진이 더 많은 쪽 너비에 맞춰 배경 폭 확장
+    const headerCols = Math.max(itemReceiptUrls.length, itemDeliveryReceiptUrls.length, 1) * 2
+    ws3.mergeCells(rRow, 1, rRow, headerCols)
+    const rHead = ws3.getCell(rRow, 1)
     rHead.value     = `${r.receipt_number}  ·  ${r.item_name}`
     rHead.font      = { bold: true, size: 11 }
     rHead.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } }
@@ -234,145 +323,24 @@ export async function buildSettlementWorkbook(
     ws3.getRow(rRow).height = 22
     rRow++
 
-    const receipts: Array<{ label: string; url?: string }> = r.receipt_photo_urls || []
+    const rowBefore = rRow
+    rRow = await renderReceiptSection(workbook, ws3, rRow, '물건 영수증', itemReceiptUrls, fetchImageBuffer)
+    rRow = await renderReceiptSection(workbook, ws3, rRow, '배송비 영수증', itemDeliveryReceiptUrls, fetchImageBuffer)
 
-    if (receipts.length === 0) {
-      ws3.mergeCells(`A${rRow}:B${rRow}`)
-      const noCell = ws3.getCell(`A${rRow}`)
+    if (rRow === rowBefore) {
+      // 물건 영수증·배송비 영수증 모두 없음
+      ws3.mergeCells(rRow, 1, rRow, 2)
+      const noCell = ws3.getCell(rRow, 1)
       noCell.value     = '사진 없음'
       noCell.font      = { italic: true, size: 10, color: { argb: 'FF999999' } }
       noCell.alignment = { horizontal: 'center', vertical: 'middle' }
       ws3.getRow(rRow).height = 30
       rRow++
-    } else {
-      const IMG_H = 40  // 영수증 사진 높이 (행 수)
-
-      for (const rp of receipts) {
-        const imgStart = rRow
-        const imgEnd   = rRow + IMG_H - 1
-        const capRow   = rRow + IMG_H
-
-        for (let rr = imgStart; rr <= imgEnd; rr++) {
-          ws3.getRow(rr).height = 15
-          ws3.getCell(`A${rr}`).border = {
-            top:    rr === imgStart ? { style: 'thin' } : undefined,
-            left:   { style: 'thin' },
-            right:  { style: 'thin' },
-            bottom: rr === imgEnd   ? { style: 'thin' } : undefined,
-          }
-        }
-
-        if (rp.url) {
-          try {
-            const img = await fetchImageBuffer(rp.url)
-            if (img) {
-              const imgId = workbook.addImage({ buffer: img.buffer, extension: img.ext as any })
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ;(ws3 as any).addImage(imgId, {
-                tl: { col: 0, row: imgStart - 1 },
-                br: { col: 1, row: imgEnd },
-                editAs: 'oneCell',
-              })
-            }
-          } catch {
-            // 이미지 삽입 실패 시 해당 칸만 건너뜀
-          }
-        }
-
-        // 캡션
-        ws3.mergeCells(`A${capRow}:B${capRow}`)
-        const capCell      = ws3.getCell(`A${capRow}`)
-        capCell.value      = `${r.item_name}  ·  ${r.receipt_number}  ·  ${rp.label}`
-        capCell.font       = { bold: true, size: 10 }
-        capCell.alignment  = { horizontal: 'center', vertical: 'middle' }
-        ws3.getRow(capRow).height = 22
-
-        rRow += IMG_H + 1
-      }
     }
 
     // 항목 구분 여백
     ws3.getRow(rRow).height = 8
     rRow++
-  }
-
-  // ── 시트4: 배송비영수증 ──────────────────────
-  const ws4 = workbook.addWorksheet('배송비영수증')
-  ws4.getColumn(1).width = 90
-  ws4.getColumn(2).width = 15
-
-  let drRow = 1
-  for (const r of items) {
-    ws4.mergeCells(`A${drRow}:B${drRow}`)
-    const drHead = ws4.getCell(`A${drRow}`)
-    drHead.value     = `${r.receipt_number}  ·  ${r.item_name}`
-    drHead.font      = { bold: true, size: 11 }
-    drHead.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }
-    drHead.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 }
-    ws4.getRow(drRow).height = 22
-    drRow++
-
-    const deliveryReceipts: string[] = r.delivery_receipt_photo_urls || []
-
-    if (deliveryReceipts.length === 0) {
-      ws4.mergeCells(`A${drRow}:B${drRow}`)
-      const noCell = ws4.getCell(`A${drRow}`)
-      noCell.value     = '사진 없음'
-      noCell.font      = { italic: true, size: 10, color: { argb: 'FF999999' } }
-      noCell.alignment = { horizontal: 'center', vertical: 'middle' }
-      ws4.getRow(drRow).height = 30
-      drRow++
-    } else {
-      const IMG_H = 40
-
-      for (let idx = 0; idx < deliveryReceipts.length; idx++) {
-        const url      = deliveryReceipts[idx]
-        const imgStart = drRow
-        const imgEnd   = drRow + IMG_H - 1
-        const capRow   = drRow + IMG_H
-
-        for (let rr = imgStart; rr <= imgEnd; rr++) {
-          ws4.getRow(rr).height = 15
-          ws4.getCell(`A${rr}`).border = {
-            top:    rr === imgStart ? { style: 'thin' } : undefined,
-            left:   { style: 'thin' },
-            right:  { style: 'thin' },
-            bottom: rr === imgEnd   ? { style: 'thin' } : undefined,
-          }
-        }
-
-        if (url) {
-          try {
-            const img = await fetchImageBuffer(url)
-            if (img) {
-              const imgId = workbook.addImage({ buffer: img.buffer, extension: img.ext as any })
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ;(ws4 as any).addImage(imgId, {
-                tl: { col: 0, row: imgStart - 1 },
-                br: { col: 1, row: imgEnd },
-                editAs: 'oneCell',
-              })
-            }
-          } catch {
-            // 이미지 삽입 실패 시 해당 칸만 건너뜀
-          }
-        }
-
-        // 캡션
-        ws4.mergeCells(`A${capRow}:B${capRow}`)
-        const capCell      = ws4.getCell(`A${capRow}`)
-        capCell.value      = `${r.item_name}  ·  ${r.receipt_number}  ·  배송비 영수증${deliveryReceipts.length > 1 ? ` ${idx + 1}` : ''}`
-        capCell.font       = { bold: true, size: 10 }
-        capCell.alignment  = { horizontal: 'center', vertical: 'middle' }
-        ws4.getRow(capRow).height = 22
-
-        drRow += IMG_H + 1
-      }
-    }
-
-    // 항목 구분 여백
-    ws4.getRow(drRow).height = 8
-    drRow++
   }
 
   return workbook
