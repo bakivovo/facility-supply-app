@@ -4,7 +4,7 @@
  * 시트 구성:
  *   [1] 정산내역 — 9열 테이블 (접수번호/물품명/구입처/구입일/수량/단가/구입금액/배송비/합계)
  *   [2] 납품사진 — 항목별 구분 헤더 + 납품완료 사진을 세로로 하나씩 순서대로 배치
- *   [3] 영수증   — 항목별 구분 헤더 + "물건 영수증"·"배송비 영수증" 라벨 구분,
+ *   [3] 영수증   — 항목별 구분 헤더 + "물건 영수증"·"배송료 영수증" 라벨 구분,
  *                  각 라벨 아래 사진을 세로로 하나씩 순서대로 배치 (없는 라벨은 생략)
  *
  * 사용처:
@@ -283,7 +283,7 @@ export async function buildSettlementWorkbook(
     dRow++
   }
 
-  // ── 시트3: 영수증 (물건 영수증 + 배송비 영수증, 항목 순서대로) ──
+  // ── 시트3: 영수증 (물건 영수증 + 배송료 영수증, 항목 순서대로) ──
   const ws3 = workbook.addWorksheet('영수증')
   ws3.getColumn(1).width = 90
   ws3.getColumn(2).width = 15
@@ -306,10 +306,10 @@ export async function buildSettlementWorkbook(
 
     const rowBefore = rRow
     rRow = await renderReceiptSection(workbook, ws3, rRow, '물건 영수증', itemReceiptUrls, fetchImageBuffer)
-    rRow = await renderReceiptSection(workbook, ws3, rRow, '배송비 영수증', itemDeliveryReceiptUrls, fetchImageBuffer)
+    rRow = await renderReceiptSection(workbook, ws3, rRow, '배송료 영수증', itemDeliveryReceiptUrls, fetchImageBuffer)
 
     if (rRow === rowBefore) {
-      // 물건 영수증·배송비 영수증 모두 없음
+      // 물건 영수증·배송료 영수증 모두 없음
       ws3.mergeCells(rRow, 1, rRow, 2)
       const noCell = ws3.getCell(rRow, 1)
       noCell.value     = '사진 없음'

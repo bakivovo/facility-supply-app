@@ -13,11 +13,11 @@ export async function POST(request: NextRequest) {
     const receipts: Array<{ label: string; url: string }> = receipt_photo_urls || []
     const deliveryReceipts: string[] = delivery_receipt_photo_urls || []
 
-    // 물건 영수증 + 배송비 영수증을 하나의 시트 목록으로 합침 (시트명 중복 방지를 위해 번호 부여)
+    // 물건 영수증 + 배송료 영수증을 하나의 시트 목록으로 합침 (시트명 중복 방지를 위해 번호 부여)
     const combined: Array<{ label: string; url: string }> = [
       ...receipts,
       ...deliveryReceipts.map((url, i) => ({
-        label: deliveryReceipts.length > 1 ? `배송비영수증_${i + 1}` : '배송비영수증',
+        label: deliveryReceipts.length > 1 ? `배송료영수증_${i + 1}` : '배송료영수증',
         url,
       })),
     ]
