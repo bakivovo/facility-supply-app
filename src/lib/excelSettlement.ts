@@ -63,7 +63,7 @@ async function renderReceiptSection(
 
   let row = startRow
 
-  // 라벨 행 (연한 회색 배경)
+  // 라벨 행 (연한 회색 배경) — 섹션당 한 번만 표시, 사진 아래 캡션은 없음
   ws.mergeCells(row, 1, row, 2)
   const labelCell = ws.getCell(row, 1)
   labelCell.value     = label
@@ -76,14 +76,12 @@ async function renderReceiptSection(
   for (let i = 0; i < validUrls.length; i++) {
     const imgStart = row
     const imgEnd   = row + RECEIPT_IMG_H - 1
-    const capRow   = row + RECEIPT_IMG_H
 
     for (let rr = imgStart; rr <= imgEnd; rr++) ws.getRow(rr).height = RECEIPT_ROW_H
-    ws.getRow(capRow).height = 22
 
-    for (let rr = imgStart; rr <= capRow; rr++) {
+    for (let rr = imgStart; rr <= imgEnd; rr++) {
       const top    = rr === imgStart ? { style: 'thin' as const } : undefined
-      const bottom = rr === capRow   ? { style: 'thin' as const } : undefined
+      const bottom = rr === imgEnd   ? { style: 'thin' as const } : undefined
       ws.getCell(rr, 1).border = { top, bottom, left: { style: 'thin' } }
       ws.getCell(rr, 2).border = { top, bottom, right: { style: 'thin' } }
     }
@@ -103,14 +101,7 @@ async function renderReceiptSection(
       // 이미지 삽입 실패 시 해당 칸만 건너뜀
     }
 
-    // 캡션
-    ws.mergeCells(capRow, 1, capRow, 2)
-    const capCell     = ws.getCell(capRow, 1)
-    capCell.value     = `${label}${validUrls.length > 1 ? ` ${i + 1}` : ''}`
-    capCell.font      = { size: 9, color: { argb: 'FF444444' } }
-    capCell.alignment = { horizontal: 'center', vertical: 'middle' }
-
-    row = capRow + 1
+    row = imgEnd + 1
   }
 
   return row
