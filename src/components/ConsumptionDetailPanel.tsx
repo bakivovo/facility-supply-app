@@ -103,13 +103,13 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
         body: JSON.stringify({
           type: 'consumption',
           item_name: updated.item_name,
-          spec: updated.spec,
+          spec: updated.spec || '',
           quantity: updated.quantity,
           used_date: updated.used_date,
-          used_location: updated.used_location,
-          input_by: updated.input_by,
-          confirmed_at: updated.confirmed_at,
-          note: updated.note,
+          used_location: updated.used_location || '',
+          input_by: updated.input_by || '',
+          confirmed_at: updated.confirmed_at || confirmedAt,
+          note: updated.note || '',
         }),
       }).then(r => r.json()).then(d => setSheetResult(d.matched ? 'matched' : 'unmatched')).catch(() => setSheetResult('unmatched'))
     } catch (err: any) {
