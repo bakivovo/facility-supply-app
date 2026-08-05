@@ -323,34 +323,35 @@ export default function RequestPage() {
         )}
       </header>
 
-      {/* 페이지 탭 */}
-      <div className="bg-white border-b border-gray-200 px-4 shrink-0">
-        <nav className="flex gap-1 max-w-5xl mx-auto">
-          {[
-            { key: 'request' as const,     label: '📋 물품 요청' },
-            { key: 'consumption' as const, label: '📦 소모내역' },
-          ].map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setPageTab(tab.key)}
-              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition ${
-                pageTab === tab.key
-                  ? 'border-[#0A67A6] text-[#0A67A6]'
-                  : 'border-transparent text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* 물품 요청 탭 — 2분할 본문 */}
-      {pageTab === 'request' && (
+      {/* 2분할 본문 — 좌: 탭 영역(물품 요청/소모내역), 우: 내 요청 조회(항상 고정) */}
       <main className="flex flex-col md:flex-row flex-1 min-h-0">
 
-        {/* ── 왼쪽: 요청 폼 ── */}
-        <div className="w-full md:w-1/2 overflow-y-auto border-b md:border-b-0 md:border-r border-gray-200 px-5 py-6 bg-white">
+        {/* ── 왼쪽: 탭 영역 ── */}
+        <div className="w-full md:w-1/2 flex flex-col border-b md:border-b-0 md:border-r border-gray-200 bg-white min-h-0">
+          {/* 탭 버튼 */}
+          <div className="border-b border-gray-200 px-5 pt-4 shrink-0">
+            <nav className="flex gap-1">
+              {[
+                { key: 'request' as const,     label: '📋 물품 요청' },
+                { key: 'consumption' as const, label: '📦 소모내역' },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setPageTab(tab.key)}
+                  className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition ${
+                    pageTab === tab.key
+                      ? 'border-[#0A67A6] text-[#0A67A6]'
+                      : 'border-transparent text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-5 py-6">
+          {pageTab === 'request' && (
         <form onSubmit={handleSubmit} className="space-y-5 max-w-lg mx-auto">
 
           {/* 이름 */}
@@ -551,9 +552,128 @@ export default function RequestPage() {
             {submitting ? '제출 중...' : '요청 제출하기'}
           </button>
         </form>
-        </div>{/* /왼쪽 칼럼 */}
+          )}
 
-        {/* ── 오른쪽: 내 요청 조회 ── */}
+          {pageTab === 'consumption' && (
+            <form onSubmit={handleConsSubmit} className="space-y-5 max-w-lg mx-auto">
+
+              {/* 이름 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">이름 <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={consForm.input_by}
+                  onChange={e => setConsForm(p => ({ ...p, input_by: e.target.value }))}
+                  placeholder="성함을 입력하세요"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* 물품명 + 자동완성 */}
+              <div className="relative">
+                <label className="block text-sm font-semibold text-gray-700 mb-1">물품명 <span className="text-red-500">*</span></label>
+                <p className="text-xs text-gray-400 mb-1">(우측 조회 목록에서 물품명·규격을 참고하세요)</p>
+                <input
+                  type="text"
+                  value={consForm.item_name}
+                  onChange={e => handleConsItemNameChange(e.target.value)}
+                  onBlur={() => setTimeout(() => setShowConsAutocomplete(false), 150)}
+                  onFocus={() => consAutocompleteItems.length > 0 && setShowConsAutocomplete(true)}
+                  placeholder="목록에 없으면 직접 입력하세요"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {showConsAutocomplete && consAutocompleteItems.length > 0 && (
+                  <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-xl shadow-lg mt-1 overflow-hidden">
+                    {consAutocompleteItems.map((item, i) => (
+                      <li
+                        key={i}
+                        onMouseDown={() => { setConsForm(p => ({ ...p, item_name: item })); setShowConsAutocomplete(false) }}
+                        className="px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer"
+                      >
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* 규격 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">규격 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
+                <input
+                  type="text"
+                  value={consForm.spec}
+                  onChange={e => setConsForm(p => ({ ...p, spec: e.target.value }))}
+                  placeholder="크기·용량·모델명 등"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* 소모수량 + 사용일 */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">소모수량 <span className="text-red-500">*</span></label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={consForm.quantity}
+                    onChange={e => setConsForm(p => ({ ...p, quantity: parseInt(e.target.value) || 1 }))}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">사용일 <span className="text-red-500">*</span></label>
+                  <input
+                    type="date"
+                    value={consForm.used_date}
+                    onChange={e => setConsForm(p => ({ ...p, used_date: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              {/* 사용처 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">사용처 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
+                <input
+                  type="text"
+                  value={consForm.used_location}
+                  onChange={e => setConsForm(p => ({ ...p, used_location: e.target.value }))}
+                  placeholder="예: 6호관 3층"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* 메모 */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">메모 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
+                <input
+                  type="text"
+                  value={consForm.note}
+                  onChange={e => setConsForm(p => ({ ...p, note: e.target.value }))}
+                  placeholder="자유 입력"
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {consError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{consError}</div>
+              )}
+
+              <button
+                type="submit"
+                disabled={consSubmitting}
+                className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
+              >
+                {consSubmitting ? '등록 중...' : '소모내역 등록'}
+              </button>
+            </form>
+          )}
+          </div>
+        </div>{/* /왼쪽 칼럼(탭 영역) */}
+
+        {/* ── 오른쪽: 내 요청 조회 (탭과 무관하게 항상 고정) ── */}
         <div className="w-full md:w-1/2 overflow-y-auto px-5 py-6 bg-gray-50">
           <div className="max-w-lg mx-auto">
           <h2 className="text-base font-bold text-gray-700 mb-1">내 요청 조회</h2>
@@ -701,126 +821,6 @@ export default function RequestPage() {
         </div>{/* /오른쪽 칼럼 */}
 
       </main>
-      )}
-
-      {/* 소모내역 탭 */}
-      {pageTab === 'consumption' && (
-        <main className="flex-1 overflow-y-auto bg-white px-5 py-6">
-          <form onSubmit={handleConsSubmit} className="space-y-5 max-w-lg mx-auto">
-
-            {/* 이름 */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">이름 <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={consForm.input_by}
-                onChange={e => setConsForm(p => ({ ...p, input_by: e.target.value }))}
-                placeholder="성함을 입력하세요"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* 물품명 + 자동완성 */}
-            <div className="relative">
-              <label className="block text-sm font-semibold text-gray-700 mb-1">물품명 <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={consForm.item_name}
-                onChange={e => handleConsItemNameChange(e.target.value)}
-                onBlur={() => setTimeout(() => setShowConsAutocomplete(false), 150)}
-                onFocus={() => consAutocompleteItems.length > 0 && setShowConsAutocomplete(true)}
-                placeholder="목록에 없으면 직접 입력하세요"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              {showConsAutocomplete && consAutocompleteItems.length > 0 && (
-                <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-xl shadow-lg mt-1 overflow-hidden">
-                  {consAutocompleteItems.map((item, i) => (
-                    <li
-                      key={i}
-                      onMouseDown={() => { setConsForm(p => ({ ...p, item_name: item })); setShowConsAutocomplete(false) }}
-                      className="px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer"
-                    >
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* 규격 */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">규격 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
-              <input
-                type="text"
-                value={consForm.spec}
-                onChange={e => setConsForm(p => ({ ...p, spec: e.target.value }))}
-                placeholder="크기·용량·모델명 등"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* 소모수량 + 사용일 */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">소모수량 <span className="text-red-500">*</span></label>
-                <input
-                  type="number"
-                  min={1}
-                  value={consForm.quantity}
-                  onChange={e => setConsForm(p => ({ ...p, quantity: parseInt(e.target.value) || 1 }))}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="flex-1">
-                <label className="block text-sm font-semibold text-gray-700 mb-1">사용일 <span className="text-red-500">*</span></label>
-                <input
-                  type="date"
-                  value={consForm.used_date}
-                  onChange={e => setConsForm(p => ({ ...p, used_date: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-
-            {/* 사용처 */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">사용처 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
-              <input
-                type="text"
-                value={consForm.used_location}
-                onChange={e => setConsForm(p => ({ ...p, used_location: e.target.value }))}
-                placeholder="예: 6호관 3층"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* 메모 */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">메모 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
-              <input
-                type="text"
-                value={consForm.note}
-                onChange={e => setConsForm(p => ({ ...p, note: e.target.value }))}
-                placeholder="자유 입력"
-                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {consError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{consError}</div>
-            )}
-
-            <button
-              type="submit"
-              disabled={consSubmitting}
-              className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
-            >
-              {consSubmitting ? '등록 중...' : '소모내역 등록'}
-            </button>
-          </form>
-        </main>
-      )}
 
       {/* 소모내역 등록 완료 토스트 */}
       {consToast && (

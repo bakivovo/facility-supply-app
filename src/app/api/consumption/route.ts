@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from '@/lib/supabase/apiClient'
+import { sendSheetWebhook } from '@/lib/sheetWebhook'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -90,5 +91,25 @@ export async function PATCH(request: NextRequest) {
     .select()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ success: true, data })
+
+  // 확인 처리(status → confirmed) 시 구글시트 관리대장에 서버에서 직접 반영
+  // (실패해도 확인 처리 자체는 성공한 상태를 유지 — sheetMatched만 false로 응답)
+  let sheetMatched: boolean | null = null
+  if (status === 'confirmed' && data && data.length > 0) {
+    const results = await Promise.all(
+      data.map(rec => sendSheetWebhook({
+        type: 'consumption',
+        item_name: rec.item_name,
+        spec: rec.spec,
+        quantity: rec.quantity,
+        used_date: rec.used_date,
+        used_location: rec.used_location,
+        input_by: rec.input_by,
+        confirmed_at: rec.confirmed_at,
+      }))
+    )
+    sheetMatched = results.every(r => r.matched)
+  }
+
+  return NextResponse.json({ success: true, data, sheetMatched })
 }

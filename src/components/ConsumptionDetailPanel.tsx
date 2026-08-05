@@ -32,6 +32,7 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [saveError, setSaveError]   = useState('')
   const [confirming, setConfirming] = useState(false)
+  const [sheetResult, setSheetResult] = useState<'matched' | 'unmatched' | null>(null)
 
   const isConfirmed = record.status === 'confirmed'
   const inputCls = isConfirmed
@@ -93,22 +94,8 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
       if (!ok) throw new Error(data.error || '확인 처리 실패')
       const updated = data.data[0]
       onUpdate(updated)
-
-      // 시트 반영 웹훅 (실패해도 확인 처리에는 영향 없음)
-      fetch('/api/admin/sheet-webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'consumption',
-          item_name: updated.item_name,
-          spec: updated.spec,
-          quantity: updated.quantity,
-          used_date: updated.used_date,
-          used_location: updated.used_location,
-          input_by: updated.input_by,
-          confirmed_at: updated.confirmed_at,
-        }),
-      }).catch(() => {})
+      // 시트 반영 웹훅은 서버(PATCH /api/consumption)에서 직접 호출됨
+      setSheetResult(data.sheetMatched ? 'matched' : 'unmatched')
     } catch (err: any) {
       alert('오류: ' + err.message)
     } finally {
@@ -169,6 +156,15 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
             disabled={isConfirmed} placeholder="자유 입력" className={inputCls} />
         </div>
       </div>
+
+      {sheetResult && (
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mb-4 ${
+          sheetResult === 'matched' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+        }`}>
+          <span>{sheetResult === 'matched' ? '✓' : '!'}</span>
+          <span>{sheetResult === 'matched' ? '관리대장 자동 입력됨' : '관리대장 미매칭 — 입고대기 시트 확인 필요'}</span>
+        </div>
+      )}
 
       <div className="flex gap-2 flex-wrap items-center">
         {!isConfirmed && (
