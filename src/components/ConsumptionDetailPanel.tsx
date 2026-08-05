@@ -100,19 +100,21 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
       // 클라이언트에서 /api/admin/sheet-webhook 프록시를 직접 호출
       console.log('sheet-webhook 호출 시작')
       setSheetResult(null)
+      const webhookPayload = {
+        type: 'consumption',
+        item_name: updated.item_name,
+        spec: updated.spec || '',
+        quantity: updated.quantity,
+        used_date: updated.used_date,
+        used_location: updated.used_location || '',
+        input_by: updated.input_by || '',
+        confirmed_at: updated.confirmed_at || confirmedAt,
+        note: updated.note || '',
+      }
+      console.log('전송 payload:', JSON.stringify(webhookPayload))
       fetch('/api/admin/sheet-webhook', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'consumption',
-          item_name: updated.item_name,
-          spec: updated.spec || '',
-          quantity: updated.quantity,
-          used_date: updated.used_date,
-          used_location: updated.used_location || '',
-          input_by: updated.input_by || '',
-          confirmed_at: updated.confirmed_at || confirmedAt,
-          note: updated.note || '',
-        }),
+        body: JSON.stringify(webhookPayload),
       }).then(response => {
         console.log('sheet-webhook 응답:', response.status)
         return response.json()
