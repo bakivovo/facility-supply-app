@@ -67,6 +67,7 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
   }
 
   const handleConfirm = async () => {
+    console.log('handleConfirm 실행됨')
     setConfirming(true)
     try {
       const supabase = createClient()
@@ -97,6 +98,7 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
 
       // 시트 반영 웹훅 — 정산완료(RequestDetailPanel)와 동일하게
       // 클라이언트에서 /api/admin/sheet-webhook 프록시를 직접 호출
+      console.log('sheet-webhook 호출 시작')
       setSheetResult(null)
       fetch('/api/admin/sheet-webhook', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -111,7 +113,10 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
           confirmed_at: updated.confirmed_at || confirmedAt,
           note: updated.note || '',
         }),
-      }).then(r => r.json()).then(d => setSheetResult(d.matched ? 'matched' : 'unmatched')).catch(() => setSheetResult('unmatched'))
+      }).then(response => {
+        console.log('sheet-webhook 응답:', response.status)
+        return response.json()
+      }).then(d => setSheetResult(d.matched ? 'matched' : 'unmatched')).catch(() => setSheetResult('unmatched'))
     } catch (err: any) {
       alert('오류: ' + err.message)
     } finally {
