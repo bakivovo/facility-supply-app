@@ -1,5 +1,4 @@
 import { getSupabaseAdmin } from '@/lib/supabase/apiClient'
-import { sendSheetWebhook } from '@/lib/sheetWebhook'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -96,24 +95,42 @@ export async function PATCH(request: NextRequest) {
   // (실패해도 확인 처리 자체는 성공한 상태를 유지 — sheetMatched만 false로 응답)
   let sheetMatched: boolean | null = null
   if (status === 'confirmed' && data && data.length > 0) {
-    const results = await Promise.all(
-      data.map(rec => {
-        const payload = {
-          type: 'consumption',
-          item_name: rec.item_name,
-          spec: rec.spec,
-          quantity: rec.quantity,
-          used_date: rec.used_date,
-          used_location: rec.used_location,
-          input_by: rec.input_by,
-          confirmed_at: rec.confirmed_at,
-          note: rec.note,
-        }
-        console.log('webhook payload:', JSON.stringify(payload))
-        return sendSheetWebhook(payload)
-      })
-    )
-    sheetMatched = results.every(r => r.matched)
+    const webhookUrl = process.env.GOOGLE_SHEET_WEBHOOK_URL
+    console.log('WEBHOOK URL:', webhookUrl) // 환경변수 확인용
+
+    if (webhookUrl) {
+      const results = await Promise.all(
+        data.map(async (record) => {
+          const payload = {
+            type: 'consumption',
+            item_name: record.item_name,
+            spec: record.spec || '',
+            quantity: record.quantity,
+            used_date: record.used_date,
+            used_location: record.used_location || '',
+            input_by: record.input_by || '',
+            confirmed_at: new Date().toISOString(),
+            note: record.note || '',
+          }
+          console.log('webhook payload:', JSON.stringify(payload))
+          try {
+            await fetch(webhookUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            })
+            console.log('webhook 전송 완료')
+            return true
+          } catch (err) {
+            console.error('webhook 오류:', err)
+            return false
+          }
+        })
+      )
+      sheetMatched = results.every(Boolean)
+    } else {
+      sheetMatched = false
+    }
   }
 
   return NextResponse.json({ success: true, data, sheetMatched })
