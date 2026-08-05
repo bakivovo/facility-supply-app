@@ -2,15 +2,16 @@
 
 import { useState } from 'react'
 import type { ConsumptionRecord } from '@/types'
-import { CONSUMPTION_STATUS_LABEL } from '@/types'
 import { createClient } from '@/lib/supabase/client'
 
 interface Props {
   record: ConsumptionRecord
   onUpdate: (updated: ConsumptionRecord) => void
+  onFieldSave: (updated: ConsumptionRecord) => void
   onDelete: (id: string) => void
-  onClose: () => void
 }
+
+type EditingField = 'input_by' | 'item_name' | 'qty_spec' | 'loc_note' | 'used_date' | null
 
 async function safeJson(res: Response): Promise<{ ok: boolean; data: any }> {
   const text = await res.text()
@@ -22,19 +23,23 @@ async function safeJson(res: Response): Promise<{ ok: boolean; data: any }> {
   }
 }
 
-const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+const editInputCls = 'flex-1 border border-orange-400 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500'
+const pencilCls = 'text-orange-400 hover:text-orange-600 text-sm leading-none transition shrink-0'
+const confirmCls = 'text-green-600 hover:text-green-700 text-sm leading-none transition shrink-0'
+const cancelCls = 'text-gray-400 hover:text-red-500 text-sm leading-none transition shrink-0'
 
-export default function ConsumptionDetailPanel({ record, onUpdate, onDelete, onClose }: Props) {
-  const [inputBy, setInputBy]     = useState(record.input_by)
-  const [itemName, setItemName]   = useState(record.item_name)
-  const [spec, setSpec]           = useState(record.spec || '')
-  const [quantity, setQuantity]   = useState(record.quantity.toString())
-  const [usedDate, setUsedDate]   = useState(record.used_date)
-  const [usedLocation, setUsedLocation] = useState(record.used_location || '')
-  const [note, setNote]           = useState(record.note || '')
+export default function ConsumptionDetailPanel({ record, onUpdate, onFieldSave, onDelete }: Props) {
+  const [editingField, setEditingField] = useState<EditingField>(null)
+  const [savingField, setSavingField] = useState(false)
 
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
-  const [saveError, setSaveError]   = useState('')
+  const [draftInputBy, setDraftInputBy]     = useState('')
+  const [draftItemName, setDraftItemName]   = useState('')
+  const [draftQuantity, setDraftQuantity]   = useState('')
+  const [draftSpec, setDraftSpec]           = useState('')
+  const [draftUsedLocation, setDraftUsedLocation] = useState('')
+  const [draftNote, setDraftNote]           = useState('')
+  const [draftUsedDate, setDraftUsedDate]   = useState('')
+
   const [confirming, setConfirming] = useState(false)
   const [reverting, setReverting]   = useState(false)
   const [deleting, setDeleting]     = useState(false)
@@ -44,34 +49,48 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onDelete, onC
 
   const isConfirmed = record.status === 'confirmed'
 
-  const buildFieldPayload = () => ({
-    input_by: inputBy,
-    item_name: itemName,
-    spec: spec || null,
-    quantity: parseInt(quantity) || 1,
-    used_date: usedDate,
-    used_location: usedLocation || null,
-    note: note || null,
-  })
+  const startEdit = (field: EditingField) => {
+    setDraftInputBy(record.input_by)
+    setDraftItemName(record.item_name)
+    setDraftQuantity(record.quantity.toString())
+    setDraftSpec(record.spec || '')
+    setDraftUsedLocation(record.used_location || '')
+    setDraftNote(record.note || '')
+    setDraftUsedDate(record.used_date)
+    setEditingField(field)
+  }
 
-  // 저장 — 상태 변경 없이 필드만 DB에 반영 (시트 재전송 없음)
-  const handleSave = async () => {
-    setSaveStatus('saving'); setSaveError('')
+  const cancelEdit = () => setEditingField(null)
+
+  // 필드 단위 즉시 저장
+  const saveFields = async (fields: Record<string, any>) => {
+    setSavingField(true)
     try {
       const res = await fetch('/api/consumption', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [record.id], ...buildFieldPayload() }),
+        body: JSON.stringify({ ids: [record.id], ...fields }),
       })
       const { ok, data } = await safeJson(res)
       if (!ok) throw new Error(data.error || '저장 실패')
-      onUpdate(data.data[0])
-      setSaveStatus('saved')
-      setTimeout(() => setSaveStatus('idle'), 2500)
+      onFieldSave(data.data[0])
+      setEditingField(null)
     } catch (err: any) {
-      setSaveError(err.message); setSaveStatus('error')
-      setTimeout(() => setSaveStatus('idle'), 4000)
+      alert('오류: ' + err.message)
+    } finally {
+      setSavingField(false)
     }
+  }
+
+  const saveInputBy    = () => saveFields({ input_by: draftInputBy })
+  const saveItemName   = () => saveFields({ item_name: draftItemName })
+  const saveQtySpec    = () => saveFields({ quantity: parseInt(draftQuantity) || 1, spec: draftSpec || null })
+  const saveLocNote    = () => saveFields({ used_location: draftUsedLocation || null, note: draftNote || null })
+  const saveUsedDate   = () => saveFields({ used_date: draftUsedDate })
+
+  const handleEnterKey = (e: React.KeyboardEvent, onConfirm: () => void) => {
+    if (e.key === 'Enter') { e.preventDefault(); onConfirm() }
+    if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
   }
 
   // 확인 처리 — status를 confirmed로 변경 + 시트 웹훅 호출
@@ -88,7 +107,6 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onDelete, onC
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ids: [record.id],
-          ...buildFieldPayload(),
           status: 'confirmed',
           confirmed_by: confirmedBy,
           confirmed_at: confirmedAt,
@@ -166,53 +184,143 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onDelete, onC
     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mt-1 mx-2 mb-2">
 
       {isConfirmed && (
-        <div className="flex items-center gap-2 bg-green-50 text-green-700 border border-green-200 rounded-lg px-3 py-2 mb-4 text-sm font-bold">
+        <div className="flex items-center gap-2 bg-[#EDE900] text-[#3a3800] rounded-lg px-2.5 py-1.5 mb-4 text-xs font-bold w-fit">
           <span>✅</span>
           <span>확인완료 — 저장해도 시트에는 재전송되지 않습니다</span>
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
-        <div><span className="text-gray-500">등록일</span><br /><strong>{record.created_at.slice(0, 10)}</strong></div>
-        {isConfirmed && (
-          <>
-            <div><span className="text-gray-500">확인자</span><br /><strong>{record.confirmed_by || '-'}</strong></div>
-            <div><span className="text-gray-500">확인일</span><br /><strong>{record.confirmed_at?.slice(0, 10) || '-'}</strong></div>
-          </>
-        )}
-      </div>
+      <div className="space-y-2.5 mb-4 text-sm">
 
-      <div className="grid grid-cols-2 gap-3 mb-4">
+        {/* 등록일 / 확인자·확인일 (읽기 전용) */}
+        <div className="grid grid-cols-2 gap-2">
+          <div><span className="text-gray-500">등록일</span><br /><strong>{record.created_at.slice(0, 10)}</strong></div>
+          {isConfirmed && (
+            <>
+              <div><span className="text-gray-500">확인자</span><br /><strong>{record.confirmed_by || '-'}</strong></div>
+              <div><span className="text-gray-500">확인일</span><br /><strong>{record.confirmed_at?.slice(0, 10) || '-'}</strong></div>
+            </>
+          )}
+        </div>
+
+        {/* 이름 */}
         <div>
-          <label className="text-xs text-gray-600 font-medium mb-1 block">이름</label>
-          <input type="text" value={inputBy} onChange={e => setInputBy(e.target.value)} className={inputCls} />
+          <p className="text-xs text-gray-500">이름</p>
+          <div className="flex items-center gap-1">
+            {editingField === 'input_by' ? (
+              <>
+                <input autoFocus value={draftInputBy} onChange={e => setDraftInputBy(e.target.value)}
+                  onKeyDown={e => handleEnterKey(e, saveInputBy)}
+                  disabled={savingField} className={editInputCls} />
+                <button type="button" onClick={saveInputBy} disabled={savingField} className={confirmCls} title="저장">✓</button>
+                <button type="button" onClick={cancelEdit} disabled={savingField} className={cancelCls} title="취소">✕</button>
+              </>
+            ) : (
+              <>
+                <strong className="flex-1">{record.input_by}</strong>
+                <button type="button" onClick={() => startEdit('input_by')} className={pencilCls} title="이름 편집">✏️</button>
+              </>
+            )}
+          </div>
         </div>
+
+        {/* 물품명 */}
         <div>
-          <label className="text-xs text-gray-600 font-medium mb-1 block">규격</label>
-          <input type="text" value={spec} onChange={e => setSpec(e.target.value)}
-            placeholder="선택 입력" className={inputCls} />
+          <p className="text-xs text-gray-500">물품명</p>
+          <div className="flex items-center gap-1">
+            {editingField === 'item_name' ? (
+              <>
+                <input autoFocus value={draftItemName} onChange={e => setDraftItemName(e.target.value)}
+                  onKeyDown={e => handleEnterKey(e, saveItemName)}
+                  disabled={savingField} className={editInputCls} />
+                <button type="button" onClick={saveItemName} disabled={savingField} className={confirmCls} title="저장">✓</button>
+                <button type="button" onClick={cancelEdit} disabled={savingField} className={cancelCls} title="취소">✕</button>
+              </>
+            ) : (
+              <>
+                <strong className="flex-1">{record.item_name}</strong>
+                <button type="button" onClick={() => startEdit('item_name')} className={pencilCls} title="물품명 편집">✏️</button>
+              </>
+            )}
+          </div>
         </div>
-        <div className="col-span-2">
-          <label className="text-xs text-gray-600 font-medium mb-1 block">물품명</label>
-          <input type="text" value={itemName} onChange={e => setItemName(e.target.value)} className={inputCls} />
-        </div>
+
+        {/* 소모수량 · 규격 */}
         <div>
-          <label className="text-xs text-gray-600 font-medium mb-1 block">소모수량</label>
-          <input type="number" min="1" value={quantity} onChange={e => setQuantity(e.target.value)} className={inputCls} />
+          <p className="text-xs text-gray-500">소모수량 · 규격</p>
+          <div className="flex items-center gap-1">
+            {editingField === 'qty_spec' ? (
+              <>
+                <input autoFocus type="number" min="1" value={draftQuantity} onChange={e => setDraftQuantity(e.target.value)}
+                  onKeyDown={e => handleEnterKey(e, saveQtySpec)}
+                  disabled={savingField} style={{ width: '72px' }}
+                  className="border border-orange-400 rounded-lg px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500" />
+                <input value={draftSpec} onChange={e => setDraftSpec(e.target.value)}
+                  onKeyDown={e => handleEnterKey(e, saveQtySpec)}
+                  disabled={savingField} placeholder="규격 입력" className={editInputCls} />
+                <button type="button" onClick={saveQtySpec} disabled={savingField} className={confirmCls} title="저장">✓</button>
+                <button type="button" onClick={cancelEdit} disabled={savingField} className={cancelCls} title="취소">✕</button>
+              </>
+            ) : (
+              <>
+                <strong className="flex-1">
+                  {record.quantity}
+                  {record.spec
+                    ? <span className="text-gray-500 font-normal"> · {record.spec}</span>
+                    : <span className="text-gray-400 font-normal text-xs"> · 규격 미입력</span>}
+                </strong>
+                <button type="button" onClick={() => startEdit('qty_spec')} className={pencilCls} title="수량·규격 편집">✏️</button>
+              </>
+            )}
+          </div>
         </div>
+
+        {/* 사용처 · 메모 */}
         <div>
-          <label className="text-xs text-gray-600 font-medium mb-1 block">사용일</label>
-          <input type="date" value={usedDate} onChange={e => setUsedDate(e.target.value)} className={inputCls} />
+          <p className="text-xs text-gray-500">사용처 · 메모</p>
+          <div className="flex items-center gap-1">
+            {editingField === 'loc_note' ? (
+              <>
+                <input autoFocus value={draftUsedLocation} onChange={e => setDraftUsedLocation(e.target.value)}
+                  onKeyDown={e => handleEnterKey(e, saveLocNote)}
+                  disabled={savingField} placeholder="사용처" className={editInputCls} />
+                <input value={draftNote} onChange={e => setDraftNote(e.target.value)}
+                  onKeyDown={e => handleEnterKey(e, saveLocNote)}
+                  disabled={savingField} placeholder="메모" className={editInputCls} />
+                <button type="button" onClick={saveLocNote} disabled={savingField} className={confirmCls} title="저장">✓</button>
+                <button type="button" onClick={cancelEdit} disabled={savingField} className={cancelCls} title="취소">✕</button>
+              </>
+            ) : (
+              <>
+                <strong className="flex-1">
+                  {record.used_location || <span className="text-gray-400 font-normal text-xs">사용처 미입력</span>}
+                  {record.note && <span className="text-gray-500 font-normal"> · {record.note}</span>}
+                </strong>
+                <button type="button" onClick={() => startEdit('loc_note')} className={pencilCls} title="사용처·메모 편집">✏️</button>
+              </>
+            )}
+          </div>
         </div>
+
+        {/* 사용일 */}
         <div>
-          <label className="text-xs text-gray-600 font-medium mb-1 block">사용처</label>
-          <input type="text" value={usedLocation} onChange={e => setUsedLocation(e.target.value)}
-            placeholder="예: 6호관 3층" className={inputCls} />
-        </div>
-        <div className="col-span-2">
-          <label className="text-xs text-gray-600 font-medium mb-1 block">메모</label>
-          <input type="text" value={note} onChange={e => setNote(e.target.value)}
-            placeholder="자유 입력" className={inputCls} />
+          <p className="text-xs text-gray-500">사용일</p>
+          <div className="flex items-center gap-1">
+            {editingField === 'used_date' ? (
+              <>
+                <input autoFocus type="date" value={draftUsedDate} onChange={e => setDraftUsedDate(e.target.value)}
+                  onKeyDown={e => handleEnterKey(e, saveUsedDate)}
+                  disabled={savingField} className={editInputCls} />
+                <button type="button" onClick={saveUsedDate} disabled={savingField} className={confirmCls} title="저장">✓</button>
+                <button type="button" onClick={cancelEdit} disabled={savingField} className={cancelCls} title="취소">✕</button>
+              </>
+            ) : (
+              <>
+                <strong className="flex-1">{record.used_date}</strong>
+                <button type="button" onClick={() => startEdit('used_date')} className={pencilCls} title="사용일 편집">✏️</button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -226,23 +334,13 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onDelete, onC
       )}
 
       <div className="flex gap-2 flex-wrap items-center">
-        <button
-          onClick={handleSave}
-          disabled={saveStatus === 'saving' || confirming || reverting || deleting}
-          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition disabled:opacity-60"
-        >
-          {saveStatus === 'saving' ? '저장 중...' : '저장'}
-        </button>
-        {saveStatus === 'saved' && <span className="text-sm text-green-600 font-medium">저장됨 ✓</span>}
-        {saveStatus === 'error' && <span className="text-sm text-red-500">{saveError || '저장 실패'}</span>}
-
         {!isConfirmed ? (
           <button
             onClick={handleConfirm}
             disabled={confirming || deleting}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-60"
           >
-            {confirming ? '처리 중...' : `확인 처리 (${CONSUMPTION_STATUS_LABEL.confirmed}로 변경)`}
+            {confirming ? '처리 중...' : '확인 처리'}
           </button>
         ) : (
           <button
@@ -261,9 +359,6 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onDelete, onC
         >
           {deleting ? '삭제 중...' : '삭제'}
         </button>
-
-        <button onClick={onClose}
-          className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition">닫기</button>
       </div>
 
       {/* 대기로 되돌리기 확인 모달 */}

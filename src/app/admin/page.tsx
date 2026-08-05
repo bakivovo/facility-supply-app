@@ -105,6 +105,10 @@ export default function AdminPage() {
   const [consMonthFilter, setConsMonthFilter] = useState(() => String(new Date().getMonth() + 1))
   const [consStatusFilter, setConsStatusFilter] = useState<string>('all')
   const [consAvailableYears, setConsAvailableYears] = useState<string[]>(() => [String(new Date().getFullYear()).slice(2)])
+  const [consSelectedIds, setConsSelectedIds] = useState<string[]>([])
+  const [consBulkLoading, setConsBulkLoading] = useState(false)
+  const [showConsBulkRevertModal, setShowConsBulkRevertModal] = useState(false)
+  const [showConsBulkDeleteModal, setShowConsBulkDeleteModal] = useState(false)
 
   // 사진 정리
   const [photoDownloading, setPhotoDownloading] = useState(false)
@@ -190,6 +194,42 @@ export default function AdminPage() {
   const handleConsumptionDelete = (id: string) => {
     setConsumptionRecords(prev => prev.filter(r => r.id !== id))
     setExpandedConsumptionId(null)
+  }
+
+  // 인라인 필드 저장 — 목록만 갱신, 패널은 열린 상태 유지
+  const handleConsumptionFieldSave = (updated: ConsumptionRecord) => {
+    setConsumptionRecords(prev => prev.map(r => r.id === updated.id ? updated : r))
+  }
+
+  const handleConsBulkRevert = async () => {
+    setShowConsBulkRevertModal(false)
+    setConsBulkLoading(true)
+    await fetch('/api/consumption', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: consSelectedIds, status: 'pending' }),
+    })
+    setConsSelectedIds([])
+    await fetchConsumption()
+    setConsBulkLoading(false)
+    showToast(`${consSelectedIds.length}건이 대기 상태로 되돌려졌습니다.`)
+  }
+
+  const handleConsBulkDelete = async () => {
+    setShowConsBulkDeleteModal(false)
+    setConsBulkLoading(true)
+    const res = await fetch('/api/consumption', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: consSelectedIds }),
+    })
+    const data = await res.json()
+    setConsBulkLoading(false)
+    if (!res.ok) { alert('삭제 오류: ' + data.error); return }
+    const count = consSelectedIds.length
+    setConsSelectedIds([])
+    await fetchConsumption()
+    showToast(`${count}건이 삭제되었습니다.`)
   }
 
   useEffect(() => {
@@ -539,6 +579,7 @@ export default function AdminPage() {
     if (consStatusFilter !== 'all' && r.status !== consStatusFilter) return false
     return true
   })
+  const consAllChecked = consFilteredRecords.length > 0 && consFilteredRecords.every(r => consSelectedIds.includes(r.id))
 
   // 세션 확인 전 빈 화면 (깜빡임 방지)
   if (!authChecked) {
@@ -1016,6 +1057,29 @@ export default function AdminPage() {
 
                 <button onClick={fetchConsumption} className="ml-auto px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
               </div>
+
+              {/* 일괄 처리 바 */}
+              <div className="flex items-center gap-3 flex-wrap mt-3">
+                {consSelectedIds.length > 0 && (
+                  <span className="text-sm font-semibold text-[#0A67A6]">{consSelectedIds.length}건 선택됨</span>
+                )}
+                <button
+                  onClick={() => setShowConsBulkRevertModal(true)}
+                  disabled={consSelectedIds.length === 0 || consBulkLoading}
+                  style={{ backgroundColor: '#F97316' }}
+                  className="px-3 py-1.5 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-40"
+                >
+                  선택 대기로 되돌리기
+                </button>
+                <button
+                  onClick={() => setShowConsBulkDeleteModal(true)}
+                  disabled={consSelectedIds.length === 0 || consBulkLoading}
+                  style={{ backgroundColor: '#DC2626' }}
+                  className="px-3 py-1.5 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-40"
+                >
+                  선택 삭제
+                </button>
+              </div>
             </div>
 
             {consumptionLoading ? (
@@ -1026,6 +1090,14 @@ export default function AdminPage() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-t border-b border-gray-200">
                   <tr>
+                    <th className="px-3 py-3 text-left">
+                      <input
+                        type="checkbox"
+                        checked={consAllChecked}
+                        onChange={e => setConsSelectedIds(e.target.checked ? consFilteredRecords.map(r => r.id) : [])}
+                        className="rounded"
+                      />
+                    </th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold">이름</th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold">물품명</th>
                     <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden sm:table-cell">규격</th>
@@ -1046,6 +1118,16 @@ export default function AdminPage() {
                         }`}
                         onClick={() => setExpandedConsumptionId(expandedConsumptionId === rec.id ? null : rec.id)}
                       >
+                        <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={consSelectedIds.includes(rec.id)}
+                            onChange={e => setConsSelectedIds(prev =>
+                              e.target.checked ? [...prev, rec.id] : prev.filter(id => id !== rec.id)
+                            )}
+                            className="rounded"
+                          />
+                        </td>
                         <td className="px-3 py-3 text-gray-600">{rec.input_by}</td>
                         <td className="px-3 py-3">
                           <span className="font-medium">{rec.item_name}</span>
@@ -1064,12 +1146,12 @@ export default function AdminPage() {
                       </tr>
                       {expandedConsumptionId === rec.id && (
                         <tr key={`${rec.id}-detail`}>
-                          <td colSpan={8} className="p-0">
+                          <td colSpan={9} className="p-0">
                             <ConsumptionDetailPanel
                               record={rec}
                               onUpdate={handleConsumptionUpdate}
+                              onFieldSave={handleConsumptionFieldSave}
                               onDelete={handleConsumptionDelete}
-                              onClose={() => setExpandedConsumptionId(null)}
                             />
                           </td>
                         </tr>
@@ -1280,6 +1362,55 @@ export default function AdminPage() {
                 className="flex-1 px-4 py-2 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
                 style={{ backgroundColor: '#DC2626' }}
               >{deleteLoading ? '삭제 중...' : '삭제 확인'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 소모내역 일괄 대기로 되돌리기 확인 모달 */}
+      {showConsBulkRevertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowConsBulkRevertModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-80 mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-gray-800 mb-2">대기로 되돌리기</h3>
+            <p className="text-sm text-gray-600 mb-5">
+              선택한 <span className="font-bold">{consSelectedIds.length}건</span>을 대기 상태로 되돌리겠습니까?
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowConsBulkRevertModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition"
+              >취소</button>
+              <button
+                onClick={handleConsBulkRevert}
+                disabled={consBulkLoading}
+                style={{ backgroundColor: '#F97316' }}
+                className="flex-1 px-4 py-2 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
+              >{consBulkLoading ? '처리 중...' : '되돌리기'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 소모내역 일괄 삭제 확인 모달 */}
+      {showConsBulkDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowConsBulkDeleteModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-80 mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-red-700 mb-2">⚠️ 삭제 확인</h3>
+            <p className="text-sm text-gray-700 mb-1">
+              선택한 <span className="font-bold">{consSelectedIds.length}건</span>을 삭제하시겠습니까?
+            </p>
+            <p className="text-xs text-gray-400 mb-5">삭제하면 복구할 수 없습니다.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowConsBulkDeleteModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition"
+              >취소</button>
+              <button
+                onClick={handleConsBulkDelete}
+                disabled={consBulkLoading}
+                style={{ backgroundColor: '#DC2626' }}
+                className="flex-1 px-4 py-2 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
+              >{consBulkLoading ? '삭제 중...' : '삭제 확인'}</button>
             </div>
           </div>
         </div>
