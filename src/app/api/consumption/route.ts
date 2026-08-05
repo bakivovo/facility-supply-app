@@ -106,6 +106,7 @@ export async function PATCH(request: NextRequest) {
         used_location: rec.used_location,
         input_by: rec.input_by,
         confirmed_at: rec.confirmed_at,
+        note: rec.note,
       }))
     )
     sheetMatched = results.every(r => r.matched)
