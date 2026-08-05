@@ -97,17 +97,21 @@ export async function PATCH(request: NextRequest) {
   let sheetMatched: boolean | null = null
   if (status === 'confirmed' && data && data.length > 0) {
     const results = await Promise.all(
-      data.map(rec => sendSheetWebhook({
-        type: 'consumption',
-        item_name: rec.item_name,
-        spec: rec.spec,
-        quantity: rec.quantity,
-        used_date: rec.used_date,
-        used_location: rec.used_location,
-        input_by: rec.input_by,
-        confirmed_at: rec.confirmed_at,
-        note: rec.note,
-      }))
+      data.map(rec => {
+        const payload = {
+          type: 'consumption',
+          item_name: rec.item_name,
+          spec: rec.spec,
+          quantity: rec.quantity,
+          used_date: rec.used_date,
+          used_location: rec.used_location,
+          input_by: rec.input_by,
+          confirmed_at: rec.confirmed_at,
+          note: rec.note,
+        }
+        console.log('webhook payload:', JSON.stringify(payload))
+        return sendSheetWebhook(payload)
+      })
     )
     sheetMatched = results.every(r => r.matched)
   }
