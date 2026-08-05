@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 interface Props {
   record: ConsumptionRecord
   onUpdate: (updated: ConsumptionRecord) => void
+  onDelete: (id: string) => void
   onClose: () => void
 }
 
@@ -21,7 +22,10 @@ async function safeJson(res: Response): Promise<{ ok: boolean; data: any }> {
   }
 }
 
-export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Props) {
+const inputCls = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+
+export default function ConsumptionDetailPanel({ record, onUpdate, onDelete, onClose }: Props) {
+  const [inputBy, setInputBy]     = useState(record.input_by)
   const [itemName, setItemName]   = useState(record.item_name)
   const [spec, setSpec]           = useState(record.spec || '')
   const [quantity, setQuantity]   = useState(record.quantity.toString())
@@ -32,28 +36,32 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [saveError, setSaveError]   = useState('')
   const [confirming, setConfirming] = useState(false)
+  const [reverting, setReverting]   = useState(false)
+  const [deleting, setDeleting]     = useState(false)
   const [sheetResult, setSheetResult] = useState<'matched' | 'unmatched' | null>(null)
+  const [showRevertModal, setShowRevertModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   const isConfirmed = record.status === 'confirmed'
-  const inputCls = isConfirmed
-    ? 'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed'
-    : 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
 
+  const buildFieldPayload = () => ({
+    input_by: inputBy,
+    item_name: itemName,
+    spec: spec || null,
+    quantity: parseInt(quantity) || 1,
+    used_date: usedDate,
+    used_location: usedLocation || null,
+    note: note || null,
+  })
+
+  // 저장 — 상태 변경 없이 필드만 DB에 반영 (시트 재전송 없음)
   const handleSave = async () => {
     setSaveStatus('saving'); setSaveError('')
     try {
       const res = await fetch('/api/consumption', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ids: [record.id],
-          item_name: itemName,
-          spec: spec || null,
-          quantity: parseInt(quantity) || 1,
-          used_date: usedDate,
-          used_location: usedLocation || null,
-          note: note || null,
-        }),
+        body: JSON.stringify({ ids: [record.id], ...buildFieldPayload() }),
       })
       const { ok, data } = await safeJson(res)
       if (!ok) throw new Error(data.error || '저장 실패')
@@ -66,8 +74,8 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
     }
   }
 
+  // 확인 처리 — status를 confirmed로 변경 + 시트 웹훅 호출
   const handleConfirm = async () => {
-    console.log('handleConfirm 실행됨')
     setConfirming(true)
     try {
       const supabase = createClient()
@@ -80,12 +88,7 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ids: [record.id],
-          item_name: itemName,
-          spec: spec || null,
-          quantity: parseInt(quantity) || 1,
-          used_date: usedDate,
-          used_location: usedLocation || null,
-          note: note || null,
+          ...buildFieldPayload(),
           status: 'confirmed',
           confirmed_by: confirmedBy,
           confirmed_at: confirmedAt,
@@ -96,9 +99,7 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
       const updated = data.data[0]
       onUpdate(updated)
 
-      // 시트 반영 웹훅 — 정산완료(RequestDetailPanel)와 동일하게
-      // 클라이언트에서 /api/admin/sheet-webhook 프록시를 직접 호출
-      console.log('sheet-webhook 호출 시작')
+      // 시트 반영 웹훅 — 정산완료(RequestDetailPanel)와 동일하게 클라이언트에서 프록시 직접 호출
       setSheetResult(null)
       const webhookPayload = {
         type: 'consumption',
@@ -111,14 +112,10 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
         confirmed_at: updated.confirmed_at || confirmedAt,
         note: updated.note || '',
       }
-      console.log('전송 payload:', JSON.stringify(webhookPayload))
       fetch('/api/admin/sheet-webhook', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(webhookPayload),
-      }).then(response => {
-        console.log('sheet-webhook 응답:', response.status)
-        return response.json()
-      }).then(d => setSheetResult(d.matched ? 'matched' : 'unmatched')).catch(() => setSheetResult('unmatched'))
+      }).then(r => r.json()).then(d => setSheetResult(d.matched ? 'matched' : 'unmatched')).catch(() => setSheetResult('unmatched'))
     } catch (err: any) {
       alert('오류: ' + err.message)
     } finally {
@@ -126,18 +123,56 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
     }
   }
 
+  // 대기로 되돌리기 — status만 pending으로 변경, 시트는 건드리지 않음
+  const handleRevert = async () => {
+    setShowRevertModal(false)
+    setReverting(true)
+    try {
+      const res = await fetch('/api/consumption', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [record.id], status: 'pending' }),
+      })
+      const { ok, data } = await safeJson(res)
+      if (!ok) throw new Error(data.error || '되돌리기 실패')
+      onUpdate(data.data[0])
+    } catch (err: any) {
+      alert('오류: ' + err.message)
+    } finally {
+      setReverting(false)
+    }
+  }
+
+  // 삭제 — Supabase에서 완전 삭제, 시트는 건드리지 않음
+  const handleDelete = async () => {
+    setShowDeleteModal(false)
+    setDeleting(true)
+    try {
+      const res = await fetch('/api/consumption', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [record.id] }),
+      })
+      const { ok, data } = await safeJson(res)
+      if (!ok) throw new Error(data.error || '삭제 실패')
+      onDelete(record.id)
+    } catch (err: any) {
+      alert('오류: ' + err.message)
+      setDeleting(false)
+    }
+  }
+
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 mt-1 mx-2 mb-2">
 
       {isConfirmed && (
-        <div className="flex items-center gap-2 bg-[#EDE900] text-[#3a3800] rounded-lg px-3 py-2 mb-4 text-sm font-bold">
-          <span>🔒</span>
-          <span>확인완료 — 읽기 전용</span>
+        <div className="flex items-center gap-2 bg-green-50 text-green-700 border border-green-200 rounded-lg px-3 py-2 mb-4 text-sm font-bold">
+          <span>✅</span>
+          <span>확인완료 — 저장해도 시트에는 재전송되지 않습니다</span>
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-2 mb-4 text-sm">
-        <div><span className="text-gray-500">등록자</span><br /><strong>{record.input_by}</strong></div>
         <div><span className="text-gray-500">등록일</span><br /><strong>{record.created_at.slice(0, 10)}</strong></div>
         {isConfirmed && (
           <>
@@ -148,35 +183,36 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="col-span-2">
-          <label className="text-xs text-gray-600 font-medium mb-1 block">물품명</label>
-          <input type="text" value={itemName} onChange={e => setItemName(e.target.value)}
-            disabled={isConfirmed} className={inputCls} />
+        <div>
+          <label className="text-xs text-gray-600 font-medium mb-1 block">이름</label>
+          <input type="text" value={inputBy} onChange={e => setInputBy(e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className="text-xs text-gray-600 font-medium mb-1 block">규격</label>
           <input type="text" value={spec} onChange={e => setSpec(e.target.value)}
-            disabled={isConfirmed} placeholder="선택 입력" className={inputCls} />
+            placeholder="선택 입력" className={inputCls} />
+        </div>
+        <div className="col-span-2">
+          <label className="text-xs text-gray-600 font-medium mb-1 block">물품명</label>
+          <input type="text" value={itemName} onChange={e => setItemName(e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className="text-xs text-gray-600 font-medium mb-1 block">소모수량</label>
-          <input type="number" min="1" value={quantity} onChange={e => setQuantity(e.target.value)}
-            disabled={isConfirmed} className={inputCls} />
+          <input type="number" min="1" value={quantity} onChange={e => setQuantity(e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className="text-xs text-gray-600 font-medium mb-1 block">사용일</label>
-          <input type="date" value={usedDate} onChange={e => setUsedDate(e.target.value)}
-            disabled={isConfirmed} className={inputCls} />
+          <input type="date" value={usedDate} onChange={e => setUsedDate(e.target.value)} className={inputCls} />
         </div>
         <div>
           <label className="text-xs text-gray-600 font-medium mb-1 block">사용처</label>
           <input type="text" value={usedLocation} onChange={e => setUsedLocation(e.target.value)}
-            disabled={isConfirmed} placeholder="예: 6호관 3층" className={inputCls} />
+            placeholder="예: 6호관 3층" className={inputCls} />
         </div>
         <div className="col-span-2">
           <label className="text-xs text-gray-600 font-medium mb-1 block">메모</label>
           <input type="text" value={note} onChange={e => setNote(e.target.value)}
-            disabled={isConfirmed} placeholder="자유 입력" className={inputCls} />
+            placeholder="자유 입력" className={inputCls} />
         </div>
       </div>
 
@@ -190,31 +226,78 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
       )}
 
       <div className="flex gap-2 flex-wrap items-center">
-        {!isConfirmed && (
-          <>
-            <button
-              onClick={handleSave}
-              disabled={saveStatus === 'saving' || confirming}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition disabled:opacity-60"
-            >
-              {saveStatus === 'saving' ? '저장 중...' : '저장'}
-            </button>
-            {saveStatus === 'saved' && <span className="text-sm text-green-600 font-medium">저장됨 ✓</span>}
-            {saveStatus === 'error' && <span className="text-sm text-red-500">{saveError || '저장 실패'}</span>}
+        <button
+          onClick={handleSave}
+          disabled={saveStatus === 'saving' || confirming || reverting || deleting}
+          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition disabled:opacity-60"
+        >
+          {saveStatus === 'saving' ? '저장 중...' : '저장'}
+        </button>
+        {saveStatus === 'saved' && <span className="text-sm text-green-600 font-medium">저장됨 ✓</span>}
+        {saveStatus === 'error' && <span className="text-sm text-red-500">{saveError || '저장 실패'}</span>}
 
-            <button
-              onClick={handleConfirm}
-              disabled={confirming}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-60"
-            >
-              {confirming ? '처리 중...' : `확인 처리 (${CONSUMPTION_STATUS_LABEL.confirmed}로 변경)`}
-            </button>
-          </>
+        {!isConfirmed ? (
+          <button
+            onClick={handleConfirm}
+            disabled={confirming || deleting}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-60"
+          >
+            {confirming ? '처리 중...' : `확인 처리 (${CONSUMPTION_STATUS_LABEL.confirmed}로 변경)`}
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowRevertModal(true)}
+            disabled={reverting || deleting}
+            className="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition disabled:opacity-60"
+          >
+            {reverting ? '처리 중...' : '대기로 되돌리기'}
+          </button>
         )}
+
+        <button
+          onClick={() => setShowDeleteModal(true)}
+          disabled={deleting || confirming || reverting}
+          className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition disabled:opacity-60"
+        >
+          {deleting ? '삭제 중...' : '삭제'}
+        </button>
 
         <button onClick={onClose}
           className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition">닫기</button>
       </div>
+
+      {/* 대기로 되돌리기 확인 모달 */}
+      {showRevertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowRevertModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-80 mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-gray-800 mb-2">대기로 되돌리기</h3>
+            <p className="text-sm text-gray-600 mb-5">이 항목을 대기 상태로 되돌리겠습니까?</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowRevertModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition">취소</button>
+              <button onClick={handleRevert}
+                className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 transition">되돌리기</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 삭제 확인 모달 */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowDeleteModal(false)}>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-80 mx-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-red-700 mb-2">⚠️ 삭제 확인</h3>
+            <p className="text-sm text-gray-700 mb-1">삭제하면 복구할 수 없습니다.</p>
+            <p className="text-sm text-gray-700 mb-5">삭제하시겠습니까?</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition">취소</button>
+              <button onClick={handleDelete}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 transition">삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

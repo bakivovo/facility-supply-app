@@ -187,6 +187,11 @@ export default function AdminPage() {
     setExpandedConsumptionId(null)
   }
 
+  const handleConsumptionDelete = (id: string) => {
+    setConsumptionRecords(prev => prev.filter(r => r.id !== id))
+    setExpandedConsumptionId(null)
+  }
+
   useEffect(() => {
     if (activeTab === 'settings') {
       Promise.all([
@@ -1063,6 +1068,7 @@ export default function AdminPage() {
                             <ConsumptionDetailPanel
                               record={rec}
                               onUpdate={handleConsumptionUpdate}
+                              onDelete={handleConsumptionDelete}
                               onClose={() => setExpandedConsumptionId(null)}
                             />
                           </td>

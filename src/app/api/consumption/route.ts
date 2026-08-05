@@ -66,13 +66,14 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const supabase = getSupabaseAdmin()
   const body = await request.json()
-  const { ids, item_name, spec, quantity, used_date, used_location, note, status, confirmed_by, confirmed_at } = body
+  const { ids, input_by, item_name, spec, quantity, used_date, used_location, note, status, confirmed_by, confirmed_at } = body
 
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     return NextResponse.json({ error: 'ids가 필요합니다.' }, { status: 400 })
   }
 
   const updateData: any = {}
+  if (input_by !== undefined) updateData.input_by = input_by
   if (item_name !== undefined) updateData.item_name = item_name
   if (spec !== undefined) updateData.spec = spec
   if (quantity !== undefined) updateData.quantity = quantity
@@ -94,4 +95,22 @@ export async function PATCH(request: NextRequest) {
   // 구글시트 웹훅 호출은 정산완료(RequestDetailPanel)와 동일하게
   // 클라이언트(ConsumptionDetailPanel)에서 /api/admin/sheet-webhook을 직접 호출한다.
   return NextResponse.json({ success: true, data })
+}
+
+export async function DELETE(request: NextRequest) {
+  const supabase = getSupabaseAdmin()
+  const { ids } = await request.json()
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: 'ids가 필요합니다.' }, { status: 400 })
+  }
+
+  // 시트에 이미 반영된 데이터는 건드리지 않고 DB 레코드만 삭제
+  const { error } = await supabase
+    .from('consumption_records')
+    .delete()
+    .in('id', ids)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true, deleted: ids.length })
 }
