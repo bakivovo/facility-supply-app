@@ -94,8 +94,24 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onClose }: Pr
       if (!ok) throw new Error(data.error || '확인 처리 실패')
       const updated = data.data[0]
       onUpdate(updated)
-      // 시트 반영 웹훅은 서버(PATCH /api/consumption)에서 직접 호출됨
-      setSheetResult(data.sheetMatched ? 'matched' : 'unmatched')
+
+      // 시트 반영 웹훅 — 정산완료(RequestDetailPanel)와 동일하게
+      // 클라이언트에서 /api/admin/sheet-webhook 프록시를 직접 호출
+      setSheetResult(null)
+      fetch('/api/admin/sheet-webhook', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'consumption',
+          item_name: updated.item_name,
+          spec: updated.spec,
+          quantity: updated.quantity,
+          used_date: updated.used_date,
+          used_location: updated.used_location,
+          input_by: updated.input_by,
+          confirmed_at: updated.confirmed_at,
+          note: updated.note,
+        }),
+      }).then(r => r.json()).then(d => setSheetResult(d.matched ? 'matched' : 'unmatched')).catch(() => setSheetResult('unmatched'))
     } catch (err: any) {
       alert('오류: ' + err.message)
     } finally {
