@@ -94,3 +94,32 @@ export const NEXT_STATUS_LABEL: Record<Status, string> = {
   settled: '',
   rejected: '',
 }
+
+// ── 소모내역 ──
+export type ConsumptionStatus = 'pending' | 'confirmed'
+
+export interface ConsumptionRecord {
+  id: string
+  item_name: string
+  spec: string | null
+  quantity: number
+  used_date: string
+  used_location: string | null
+  status: ConsumptionStatus
+  input_by: string
+  input_at: string
+  confirmed_by: string | null
+  confirmed_at: string | null
+  note: string | null
+  created_at: string
+}
+
+export const CONSUMPTION_STATUS_LABEL: Record<ConsumptionStatus, string> = {
+  pending: '대기',
+  confirmed: '확인완료',
+}
+
+export const CONSUMPTION_STATUS_COLOR: Record<ConsumptionStatus, string> = {
+  pending: 'bg-orange-100 text-orange-700',
+  confirmed: 'bg-green-100 text-green-700',
+}

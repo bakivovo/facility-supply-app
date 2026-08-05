@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AdminHeader from '@/components/AdminHeader'
 import RequestDetailPanel from '@/components/RequestDetailPanel'
-import type { Request, Status } from '@/types'
-import { STATUS_LABEL, STATUS_COLOR, URGENCY_LABEL, URGENCY_COLOR } from '@/types'
+import ConsumptionDetailPanel from '@/components/ConsumptionDetailPanel'
+import type { Request, Status, ConsumptionRecord } from '@/types'
+import { STATUS_LABEL, STATUS_COLOR, URGENCY_LABEL, URGENCY_COLOR, CONSUMPTION_STATUS_LABEL, CONSUMPTION_STATUS_COLOR } from '@/types'
 
 // 3개월 이전 정산완료 항목 중 사진이 남아있는 건 반환
 function getOldPhotoItems(requests: Request[]): Request[] {
@@ -96,6 +97,15 @@ export default function AdminPage() {
     setTimeout(() => setToastVisible(false), 4000)
   }
 
+  // 소모내역
+  const [consumptionRecords, setConsumptionRecords] = useState<ConsumptionRecord[]>([])
+  const [consumptionLoading, setConsumptionLoading] = useState(false)
+  const [expandedConsumptionId, setExpandedConsumptionId] = useState<string | null>(null)
+  const [consYearFilter, setConsYearFilter] = useState(() => String(new Date().getFullYear()).slice(2))
+  const [consMonthFilter, setConsMonthFilter] = useState(() => String(new Date().getMonth() + 1))
+  const [consStatusFilter, setConsStatusFilter] = useState<string>('all')
+  const [consAvailableYears, setConsAvailableYears] = useState<string[]>(() => [String(new Date().getFullYear()).slice(2)])
+
   // 사진 정리
   const [photoDownloading, setPhotoDownloading] = useState(false)
   const [photoDownloadDone, setPhotoDownloadDone] = useState(false)
@@ -150,6 +160,32 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  const fetchConsumption = useCallback(async () => {
+    setConsumptionLoading(true)
+    const res = await fetch('/api/consumption')
+    const data = await res.json()
+    const records: ConsumptionRecord[] = data.data || []
+    setConsumptionRecords(records)
+
+    const yearSet = new Set<string>()
+    yearSet.add(String(new Date().getFullYear()).slice(2))
+    records.forEach(r => {
+      const yy = r.used_date?.slice(2, 4)
+      if (yy && /^\d{2}$/.test(yy)) yearSet.add(yy)
+    })
+    setConsAvailableYears(Array.from(yearSet).sort())
+    setConsumptionLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (activeTab === 'consumption') fetchConsumption()
+  }, [activeTab, fetchConsumption])
+
+  const handleConsumptionUpdate = (updated: ConsumptionRecord) => {
+    setConsumptionRecords(prev => prev.map(r => r.id === updated.id ? updated : r))
+    setExpandedConsumptionId(null)
+  }
 
   useEffect(() => {
     if (activeTab === 'settings') {
@@ -488,6 +524,16 @@ export default function AdminPage() {
     : `20${yearFilter}년 ${monthFilter}월 기준`
 
   const allChecked = filteredRequests.length > 0 && filteredRequests.every(r => selectedIds.includes(r.id))
+
+  // 소모내역 — 연도·월·상태 필터 (used_date 기준)
+  const consFilteredRecords = consumptionRecords.filter(r => {
+    const yy = r.used_date?.slice(2, 4)
+    const mm = r.used_date ? String(parseInt(r.used_date.slice(5, 7))) : ''
+    if (yy !== consYearFilter) return false
+    if (consMonthFilter !== 'all' && mm !== consMonthFilter) return false
+    if (consStatusFilter !== 'all' && r.status !== consStatusFilter) return false
+    return true
+  })
 
   // 세션 확인 전 빈 화면 (깜빡임 방지)
   if (!authChecked) {
@@ -915,6 +961,117 @@ export default function AdminPage() {
             )}
             {monthlyData.length === 0 && !monthlyLoading && (
               <p className="text-center text-gray-400 py-8">조회 버튼을 눌러 데이터를 불러오세요.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── 소모내역 탭 ─── */}
+      {activeTab === 'consumption' && (
+        <div className="max-w-6xl mx-auto px-4 py-6">
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="p-6 pb-4">
+              <h2 className="text-lg font-bold text-gray-800 mb-4">소모내역</h2>
+
+              {/* 필터 바 */}
+              <div className="flex gap-2 flex-wrap items-center">
+                <select
+                  value={consYearFilter}
+                  onChange={e => setConsYearFilter(e.target.value)}
+                  className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {consAvailableYears.map(yy => (
+                    <option key={yy} value={yy}>{`20${yy}`}년</option>
+                  ))}
+                </select>
+                <select
+                  value={consMonthFilter}
+                  onChange={e => setConsMonthFilter(e.target.value)}
+                  className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">전체 월</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={String(m)}>{m}월</option>
+                  ))}
+                </select>
+
+                <div className="w-px h-5 bg-gray-300" />
+
+                {(['all', 'pending', 'confirmed'] as const).map(s => (
+                  <button
+                    key={s}
+                    onClick={() => setConsStatusFilter(s)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      consStatusFilter === s ? 'bg-[#0A67A6] text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'
+                    }`}
+                  >
+                    {s === 'all' ? '전체' : CONSUMPTION_STATUS_LABEL[s]}
+                  </button>
+                ))}
+
+                <button onClick={fetchConsumption} className="ml-auto px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
+              </div>
+            </div>
+
+            {consumptionLoading ? (
+              <div className="py-16 text-center text-gray-400">불러오는 중...</div>
+            ) : consFilteredRecords.length === 0 ? (
+              <div className="py-16 text-center text-gray-400">소모내역이 없습니다.</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-t border-b border-gray-200">
+                  <tr>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold">이름</th>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold">물품명</th>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden sm:table-cell">규격</th>
+                    <th className="px-3 py-3 text-right text-gray-600 font-semibold">수량</th>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold">사용일</th>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden md:table-cell">사용처</th>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold" style={{ minWidth: '84px' }}>상태</th>
+                    <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden lg:table-cell">등록일</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {consFilteredRecords.map(rec => (
+                    <>
+                      <tr
+                        key={rec.id}
+                        className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition ${
+                          expandedConsumptionId === rec.id ? 'bg-blue-50' : ''
+                        }`}
+                        onClick={() => setExpandedConsumptionId(expandedConsumptionId === rec.id ? null : rec.id)}
+                      >
+                        <td className="px-3 py-3 text-gray-600">{rec.input_by}</td>
+                        <td className="px-3 py-3">
+                          <span className="font-medium">{rec.item_name}</span>
+                        </td>
+                        <td className="px-3 py-3 hidden sm:table-cell text-gray-500 text-xs">{rec.spec || '-'}</td>
+                        <td className="px-3 py-3 text-right text-gray-700 text-xs tabular-nums">{rec.quantity}</td>
+                        <td className="px-3 py-3 text-xs">{rec.used_date}</td>
+                        <td className="px-3 py-3 hidden md:table-cell text-gray-600 text-xs">{rec.used_location || '-'}</td>
+                        <td className="px-3 py-3" style={{ minWidth: '84px' }}>
+                          <span className={`rounded-full text-xs font-semibold ${CONSUMPTION_STATUS_COLOR[rec.status]}`}
+                            style={{ padding: '3px 8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                            {CONSUMPTION_STATUS_LABEL[rec.status]}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 hidden lg:table-cell text-gray-500 text-xs">{rec.created_at.slice(0, 10)}</td>
+                      </tr>
+                      {expandedConsumptionId === rec.id && (
+                        <tr key={`${rec.id}-detail`}>
+                          <td colSpan={8} className="p-0">
+                            <ConsumptionDetailPanel
+                              record={rec}
+                              onUpdate={handleConsumptionUpdate}
+                              onClose={() => setExpandedConsumptionId(null)}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </div>

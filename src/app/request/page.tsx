@@ -5,7 +5,13 @@ import { useState, useEffect, useRef } from 'react'
 import { UNITS, STATUS_LABEL, STATUS_COLOR, type Category } from '@/types'
 import { uploadManyToStorage } from '@/lib/uploadToStorage'
 
+function todayStr(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export default function RequestPage() {
+  const [pageTab, setPageTab] = useState<'request' | 'consumption'>('request')
   const [categories, setCategories] = useState<Category[]>([])
   const [form, setForm] = useState({
     requester_name: '',
@@ -36,6 +42,23 @@ export default function RequestPage() {
   const [lookupYearFilter, setLookupYearFilter] = useState('all')
   const [lookupMonthFilter, setLookupMonthFilter] = useState('all')
   const [lookupAvailableYears, setLookupAvailableYears] = useState<string[]>([])
+
+  // 소모내역
+  const [consForm, setConsForm] = useState({
+    input_by: '',
+    item_name: '',
+    spec: '',
+    quantity: 1,
+    used_date: todayStr(),
+    used_location: '',
+    note: '',
+  })
+  const [consAutocompleteItems, setConsAutocompleteItems] = useState<string[]>([])
+  const [showConsAutocomplete, setShowConsAutocomplete] = useState(false)
+  const [consSubmitting, setConsSubmitting] = useState(false)
+  const [consError, setConsError] = useState('')
+  const [consToast, setConsToast] = useState(false)
+  const consAutocompleteTimer = useRef<NodeJS.Timeout | undefined>(undefined)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const autocompleteTimer = useRef<NodeJS.Timeout | undefined>(undefined)
@@ -68,6 +91,48 @@ export default function RequestPage() {
       setAutocompleteItems(data.items || [])
       setShowAutocomplete(true)
     }, 250)
+  }
+
+  const handleConsItemNameChange = (val: string) => {
+    setConsForm(prev => ({ ...prev, item_name: val }))
+    clearTimeout(consAutocompleteTimer.current)
+    if (val.length < 1) { setConsAutocompleteItems([]); setShowConsAutocomplete(false); return }
+    consAutocompleteTimer.current = setTimeout(async () => {
+      const res = await fetch(`/api/requests?autocomplete=${encodeURIComponent(val)}`)
+      const data = await res.json()
+      setConsAutocompleteItems(data.items || [])
+      setShowConsAutocomplete(true)
+    }, 250)
+  }
+
+  const handleConsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setConsError('')
+    if (!consForm.input_by || !consForm.item_name || !consForm.quantity || !consForm.used_date) {
+      setConsError('필수 항목을 모두 입력해주세요.')
+      return
+    }
+    if (consForm.quantity < 1) {
+      setConsError('소모수량은 1 이상이어야 합니다.')
+      return
+    }
+    setConsSubmitting(true)
+    try {
+      const res = await fetch('/api/consumption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(consForm),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '등록 실패')
+      setConsForm({ input_by: '', item_name: '', spec: '', quantity: 1, used_date: todayStr(), used_location: '', note: '' })
+      setConsToast(true)
+      setTimeout(() => setConsToast(false), 3000)
+    } catch (err: any) {
+      setConsError(err.message || '오류가 발생했습니다.')
+    } finally {
+      setConsSubmitting(false)
+    }
   }
 
   const uploadPhotos = async (): Promise<string[]> => {
@@ -258,7 +323,30 @@ export default function RequestPage() {
         )}
       </header>
 
-      {/* 2분할 본문 */}
+      {/* 페이지 탭 */}
+      <div className="bg-white border-b border-gray-200 px-4 shrink-0">
+        <nav className="flex gap-1 max-w-5xl mx-auto">
+          {[
+            { key: 'request' as const,     label: '📋 물품 요청' },
+            { key: 'consumption' as const, label: '📦 소모내역' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setPageTab(tab.key)}
+              className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition ${
+                pageTab === tab.key
+                  ? 'border-[#0A67A6] text-[#0A67A6]'
+                  : 'border-transparent text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* 물품 요청 탭 — 2분할 본문 */}
+      {pageTab === 'request' && (
       <main className="flex flex-col md:flex-row flex-1 min-h-0">
 
         {/* ── 왼쪽: 요청 폼 ── */}
@@ -613,6 +701,135 @@ export default function RequestPage() {
         </div>{/* /오른쪽 칼럼 */}
 
       </main>
+      )}
+
+      {/* 소모내역 탭 */}
+      {pageTab === 'consumption' && (
+        <main className="flex-1 overflow-y-auto bg-white px-5 py-6">
+          <form onSubmit={handleConsSubmit} className="space-y-5 max-w-lg mx-auto">
+
+            {/* 이름 */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">이름 <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={consForm.input_by}
+                onChange={e => setConsForm(p => ({ ...p, input_by: e.target.value }))}
+                placeholder="성함을 입력하세요"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* 물품명 + 자동완성 */}
+            <div className="relative">
+              <label className="block text-sm font-semibold text-gray-700 mb-1">물품명 <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={consForm.item_name}
+                onChange={e => handleConsItemNameChange(e.target.value)}
+                onBlur={() => setTimeout(() => setShowConsAutocomplete(false), 150)}
+                onFocus={() => consAutocompleteItems.length > 0 && setShowConsAutocomplete(true)}
+                placeholder="목록에 없으면 직접 입력하세요"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {showConsAutocomplete && consAutocompleteItems.length > 0 && (
+                <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-xl shadow-lg mt-1 overflow-hidden">
+                  {consAutocompleteItems.map((item, i) => (
+                    <li
+                      key={i}
+                      onMouseDown={() => { setConsForm(p => ({ ...p, item_name: item })); setShowConsAutocomplete(false) }}
+                      className="px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer"
+                    >
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {/* 규격 */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">규격 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
+              <input
+                type="text"
+                value={consForm.spec}
+                onChange={e => setConsForm(p => ({ ...p, spec: e.target.value }))}
+                placeholder="크기·용량·모델명 등"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* 소모수량 + 사용일 */}
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold text-gray-700 mb-1">소모수량 <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  min={1}
+                  value={consForm.quantity}
+                  onChange={e => setConsForm(p => ({ ...p, quantity: parseInt(e.target.value) || 1 }))}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-semibold text-gray-700 mb-1">사용일 <span className="text-red-500">*</span></label>
+                <input
+                  type="date"
+                  value={consForm.used_date}
+                  onChange={e => setConsForm(p => ({ ...p, used_date: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* 사용처 */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">사용처 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
+              <input
+                type="text"
+                value={consForm.used_location}
+                onChange={e => setConsForm(p => ({ ...p, used_location: e.target.value }))}
+                placeholder="예: 6호관 3층"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* 메모 */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">메모 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
+              <input
+                type="text"
+                value={consForm.note}
+                onChange={e => setConsForm(p => ({ ...p, note: e.target.value }))}
+                placeholder="자유 입력"
+                className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {consError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{consError}</div>
+            )}
+
+            <button
+              type="submit"
+              disabled={consSubmitting}
+              className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ boxShadow: '0 2px 0 rgba(0,0,0,0.08)' }}
+            >
+              {consSubmitting ? '등록 중...' : '소모내역 등록'}
+            </button>
+          </form>
+        </main>
+      )}
+
+      {/* 소모내역 등록 완료 토스트 */}
+      {consToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+          <div className="bg-gray-800 text-white text-sm font-medium px-5 py-3 rounded-full shadow-lg">
+            등록되었습니다
+          </div>
+        </div>
+      )}
     </div>
   )
 }

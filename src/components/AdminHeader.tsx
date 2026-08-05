@@ -17,9 +17,10 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
   }
 
   const tabs = [
-    { key: 'dashboard', label: '📋 요청 목록' },
-    { key: 'monthly',   label: '📊 월별 정산' },
-    { key: 'settings',  label: '⚙️ 설정'     },
+    { key: 'dashboard',    label: '📋 요청 목록' },
+    { key: 'monthly',      label: '📊 월별 정산' },
+    { key: 'consumption',  label: '📦 소모내역' },
+    { key: 'settings',     label: '⚙️ 설정'     },
   ]
 
   return (
