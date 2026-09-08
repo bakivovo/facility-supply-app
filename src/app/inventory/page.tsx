@@ -13,6 +13,15 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 type AccessState = 'checking' | 'denied' | 'granted'
 type UserRole = 'final_manager' | 'inventory_manager'
 
@@ -51,6 +60,7 @@ export default function InventoryPage() {
   const [viewMonthFilter, setViewMonthFilter] = useState(() => String(new Date().getMonth() + 1))
   const [viewStatusFilter, setViewStatusFilter] = useState('all')
   const [viewAvailableYears, setViewAvailableYears] = useState<string[]>(() => [String(new Date().getFullYear()).slice(2)])
+  const [viewExcelLoading, setViewExcelLoading] = useState(false)
 
   // ── 로그인 + 권한 체크 ──
   useEffect(() => {
@@ -155,6 +165,24 @@ export default function InventoryPage() {
       setSubmitError(err.message || '오류가 발생했습니다.')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleViewExcel = async () => {
+    setViewExcelLoading(true)
+    try {
+      const year = 2000 + parseInt(viewYearFilter, 10)
+      const month = viewMonthFilter === 'all' ? new Date().getMonth() + 1 : parseInt(viewMonthFilter, 10)
+      const res = await fetch(`/api/excel/consumption?year=${year}&month=${month}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `서버 오류 (${res.status})`)
+      }
+      downloadBlob(await res.blob(), `소모내역_${year}년${month}월.xlsx`)
+    } catch (err: any) {
+      alert('엑셀 생성 오류: ' + err.message)
+    } finally {
+      setViewExcelLoading(false)
     }
   }
 
@@ -416,7 +444,17 @@ export default function InventoryPage() {
         <div className="max-w-6xl mx-auto px-4 py-6">
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="p-6 pb-4">
-              <h2 className="text-lg font-bold text-gray-800 mb-2">소모내역 열람</h2>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-bold text-gray-800">소모내역 열람</h2>
+                <button
+                  onClick={handleViewExcel}
+                  disabled={viewExcelLoading}
+                  style={{ backgroundColor: '#2E9E5B' }}
+                  className="px-3 py-1.5 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
+                >
+                  {viewExcelLoading ? '생성 중...' : '📥 소모내역 엑셀 다운로드'}
+                </button>
+              </div>
               {userRole === 'inventory_manager' && (
                 <p className="text-xs text-amber-600 mb-4">수정이 필요하면 최종관리자에게 문의하세요.</p>
               )}

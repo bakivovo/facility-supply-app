@@ -111,6 +111,7 @@ export default function AdminPage() {
   const [consBulkLoading, setConsBulkLoading] = useState(false)
   const [showConsBulkRevertModal, setShowConsBulkRevertModal] = useState(false)
   const [showConsBulkDeleteModal, setShowConsBulkDeleteModal] = useState(false)
+  const [consExcelLoading, setConsExcelLoading] = useState(false)
 
   // 사진 정리
   const [photoDownloading, setPhotoDownloading] = useState(false)
@@ -368,6 +369,21 @@ export default function AdminPage() {
       downloadBlob(await res.blob(), `${y.slice(2)}${m}_정산현황.xlsx`)
     } catch (err: any) { alert('엑셀 생성 오류: ' + err.message) }
     setExcelLoading(false)
+  }
+
+  const handleConsumptionExcel = async () => {
+    setConsExcelLoading(true)
+    try {
+      const year = 2000 + parseInt(consYearFilter, 10)
+      const month = consMonthFilter === 'all' ? new Date().getMonth() + 1 : parseInt(consMonthFilter, 10)
+      const res = await fetch(`/api/excel/consumption?year=${year}&month=${month}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `서버 오류 (${res.status})`)
+      }
+      downloadBlob(await res.blob(), `소모내역_${year}년${month}월.xlsx`)
+    } catch (err: any) { alert('엑셀 생성 오류: ' + err.message) }
+    setConsExcelLoading(false)
   }
 
   const handleAllExcel = async () => {
@@ -1087,7 +1103,15 @@ export default function AdminPage() {
                   </button>
                 ))}
 
-                <button onClick={fetchConsumption} className="ml-auto px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
+                <button
+                  onClick={handleConsumptionExcel}
+                  disabled={consExcelLoading}
+                  style={{ backgroundColor: '#2E9E5B' }}
+                  className="ml-auto px-3 py-1.5 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
+                >
+                  {consExcelLoading ? '생성 중...' : '📥 소모내역 엑셀 다운로드'}
+                </button>
+                <button onClick={fetchConsumption} className="px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
               </div>
 
               {/* 일괄 처리 바 */}
