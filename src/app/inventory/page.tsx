@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import InventoryHeader from '@/components/InventoryHeader'
+import ConsumptionDetailPanel from '@/components/ConsumptionDetailPanel'
 import type { ConsumptionRecord, InventoryItem } from '@/types'
 import { CONSUMPTION_STATUS_LABEL, CONSUMPTION_STATUS_COLOR } from '@/types'
 
@@ -13,12 +14,15 @@ function todayStr(): string {
 }
 
 type AccessState = 'checking' | 'denied' | 'granted'
+type UserRole = 'final_manager' | 'inventory_manager'
 
 export default function InventoryPage() {
   const router = useRouter()
   const [accessState, setAccessState] = useState<AccessState>('checking')
+  const [userRole, setUserRole] = useState<UserRole>('inventory_manager')
   const [userEmail, setUserEmail] = useState('')
   const [activeTab, setActiveTab] = useState('stock')
+  const [expandedViewId, setExpandedViewId] = useState<string | null>(null)
 
   // 재고 현황
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
@@ -58,7 +62,15 @@ export default function InventoryPage() {
       }
       setUserEmail(user.email || '')
       const role = (user.user_metadata as any)?.role
-      setAccessState(role === 'inventory_manager' ? 'granted' : 'denied')
+      if (role === 'inventory_manager') {
+        setUserRole('inventory_manager')
+        setAccessState('granted')
+      } else if (!role || role === 'final_manager') {
+        setUserRole('final_manager')
+        setAccessState('granted')
+      } else {
+        setAccessState('denied')
+      }
     })
   }, [router])
 
@@ -146,6 +158,19 @@ export default function InventoryPage() {
     }
   }
 
+  // ── 소모내역 열람: 최종관리자 전용 편집 핸들러 ──
+  const handleViewUpdate = (updated: ConsumptionRecord) => {
+    setViewRecords(prev => prev.map(r => r.id === updated.id ? updated : r))
+    setExpandedViewId(null)
+  }
+  const handleViewFieldSave = (updated: ConsumptionRecord) => {
+    setViewRecords(prev => prev.map(r => r.id === updated.id ? updated : r))
+  }
+  const handleViewDelete = (id: string) => {
+    setViewRecords(prev => prev.filter(r => r.id !== id))
+    setExpandedViewId(null)
+  }
+
   // ── 소모내역 열람 필터 ──
   const viewFiltered = viewRecords.filter(r => {
     const yy = r.used_date?.slice(2, 4)
@@ -170,7 +195,7 @@ export default function InventoryPage() {
   if (accessState === 'denied') {
     return (
       <div className="min-h-screen bg-gray-100">
-        <InventoryHeader activeTab={activeTab} setActiveTab={setActiveTab} userEmail={userEmail} showTabs={false} />
+        <InventoryHeader activeTab={activeTab} setActiveTab={setActiveTab} userEmail={userEmail} roleLabel="재고관리자" showTabs={false} />
         <div className="flex items-center justify-center px-4" style={{ minHeight: 'calc(100vh - 88px)' }}>
           <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center">
             <div className="text-4xl mb-3">🚫</div>
@@ -190,7 +215,12 @@ export default function InventoryPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <InventoryHeader activeTab={activeTab} setActiveTab={setActiveTab} userEmail={userEmail} />
+      <InventoryHeader
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        userEmail={userEmail}
+        roleLabel={userRole === 'final_manager' ? '최종관리자' : '재고관리자'}
+      />
 
       {/* ─── 재고 현황 탭 ─── */}
       {activeTab === 'stock' && (
@@ -387,7 +417,9 @@ export default function InventoryPage() {
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="p-6 pb-4">
               <h2 className="text-lg font-bold text-gray-800 mb-2">소모내역 열람</h2>
-              <p className="text-xs text-amber-600 mb-4">수정이 필요하면 최종관리자에게 문의하세요.</p>
+              {userRole === 'inventory_manager' && (
+                <p className="text-xs text-amber-600 mb-4">수정이 필요하면 최종관리자에게 문의하세요.</p>
+              )}
 
               {/* 필터 바 */}
               <div className="flex gap-2 flex-wrap items-center">
@@ -450,23 +482,47 @@ export default function InventoryPage() {
                   </thead>
                   <tbody>
                     {viewFiltered.map(rec => (
-                      <tr key={rec.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="px-3 py-3 text-gray-600">{rec.input_by}</td>
-                        <td className="px-3 py-3">
-                          <span className="font-medium">{rec.item_name}</span>
-                        </td>
-                        <td className="px-3 py-3 hidden sm:table-cell text-gray-500 text-xs">{rec.spec || '-'}</td>
-                        <td className="px-3 py-3 text-right text-gray-700 text-xs tabular-nums">{rec.quantity}</td>
-                        <td className="px-3 py-3 text-xs">{rec.used_date}</td>
-                        <td className="px-3 py-3 hidden md:table-cell text-gray-600 text-xs">{rec.used_location || '-'}</td>
-                        <td className="px-3 py-3" style={{ minWidth: '84px' }}>
-                          <span className={`rounded-full text-xs font-semibold ${CONSUMPTION_STATUS_COLOR[rec.status]}`}
-                            style={{ padding: '3px 8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                            {CONSUMPTION_STATUS_LABEL[rec.status]}
-                          </span>
-                        </td>
-                        <td className="px-3 py-3 hidden lg:table-cell text-gray-500 text-xs">{rec.created_at.slice(0, 10)}</td>
-                      </tr>
+                      <>
+                        <tr
+                          key={rec.id}
+                          className={`border-b border-gray-100 hover:bg-gray-50 transition ${
+                            userRole === 'final_manager' ? 'cursor-pointer' : ''
+                          } ${expandedViewId === rec.id ? 'bg-blue-50' : ''}`}
+                          onClick={() => {
+                            if (userRole === 'final_manager') {
+                              setExpandedViewId(expandedViewId === rec.id ? null : rec.id)
+                            }
+                          }}
+                        >
+                          <td className="px-3 py-3 text-gray-600">{rec.input_by}</td>
+                          <td className="px-3 py-3">
+                            <span className="font-medium">{rec.item_name}</span>
+                          </td>
+                          <td className="px-3 py-3 hidden sm:table-cell text-gray-500 text-xs">{rec.spec || '-'}</td>
+                          <td className="px-3 py-3 text-right text-gray-700 text-xs tabular-nums">{rec.quantity}</td>
+                          <td className="px-3 py-3 text-xs">{rec.used_date}</td>
+                          <td className="px-3 py-3 hidden md:table-cell text-gray-600 text-xs">{rec.used_location || '-'}</td>
+                          <td className="px-3 py-3" style={{ minWidth: '84px' }}>
+                            <span className={`rounded-full text-xs font-semibold ${CONSUMPTION_STATUS_COLOR[rec.status]}`}
+                              style={{ padding: '3px 8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                              {CONSUMPTION_STATUS_LABEL[rec.status]}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3 hidden lg:table-cell text-gray-500 text-xs">{rec.created_at.slice(0, 10)}</td>
+                        </tr>
+                        {userRole === 'final_manager' && expandedViewId === rec.id && (
+                          <tr key={`${rec.id}-detail`}>
+                            <td colSpan={8} className="p-0">
+                              <ConsumptionDetailPanel
+                                record={rec}
+                                onUpdate={handleViewUpdate}
+                                onFieldSave={handleViewFieldSave}
+                                onDelete={handleViewDelete}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     ))}
                   </tbody>
                 </table>
