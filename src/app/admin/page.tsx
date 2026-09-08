@@ -38,6 +38,8 @@ function downloadBlob(blob: Blob, filename: string) {
 export default function AdminPage() {
   const router = useRouter()
   const [authChecked, setAuthChecked] = useState(false)
+  const [accessDenied, setAccessDenied] = useState(false)
+  const [userEmail, setUserEmail] = useState('')
   const [activeTab, setActiveTab] = useState('dashboard')
   const [requests, setRequests] = useState<Request[]>([])
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
@@ -117,14 +119,18 @@ export default function AdminPage() {
   const [showPhotoDeleteModal, setShowPhotoDeleteModal] = useState(false)
 
   // 세션 체크 — 미로그인 시 로그인 페이지로 이동
+  // role이 없거나 'final_manager'인 계정만 /admin 접근 허용 (그 외, 예: inventory_manager는 차단)
   useEffect(() => {
     const supabase = createClient()
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {
         router.replace('/admin/login')
-      } else {
-        setAuthChecked(true)
+        return
       }
+      setUserEmail(user.email || '')
+      const role = (user.user_metadata as any)?.role
+      setAccessDenied(!!role && role !== 'final_manager')
+      setAuthChecked(true)
     })
   }, [router])
 
@@ -586,9 +592,35 @@ export default function AdminPage() {
     return <div className="min-h-screen bg-gray-100 flex items-center justify-center text-gray-400">로딩 중...</div>
   }
 
+  if (accessDenied) {
+    const handleDeniedLogout = async () => {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      router.push('/admin/login')
+    }
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <AdminHeader activeTab={activeTab} setActiveTab={setActiveTab} userEmail={userEmail} showTabs={false} />
+        <div className="flex items-center justify-center px-4" style={{ minHeight: 'calc(100vh - 88px)' }}>
+          <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center">
+            <div className="text-4xl mb-3">🚫</div>
+            <h2 className="text-lg font-bold text-gray-800 mb-2">접근 권한이 없습니다</h2>
+            <p className="text-sm text-gray-500 mb-6">최종관리자 계정으로 로그인해주세요.</p>
+            <button
+              onClick={handleDeniedLogout}
+              className="w-full py-3 bg-gray-700 text-white rounded-xl font-semibold hover:bg-gray-800 transition"
+            >
+              로그아웃
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
-      <AdminHeader activeTab={activeTab} setActiveTab={setActiveTab} />
+      <AdminHeader activeTab={activeTab} setActiveTab={setActiveTab} userEmail={userEmail} />
 
       {/* ─── 요청 목록 탭 ─── */}
       {activeTab === 'dashboard' && (

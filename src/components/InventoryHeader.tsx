@@ -4,9 +4,10 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function InventoryHeader({ activeTab, setActiveTab, showTabs = true }: {
+export default function InventoryHeader({ activeTab, setActiveTab, userEmail, showTabs = true }: {
   activeTab: string
   setActiveTab: (tab: string) => void
+  userEmail?: string
   showTabs?: boolean
 }) {
   const router = useRouter()
@@ -48,6 +49,14 @@ export default function InventoryHeader({ activeTab, setActiveTab, showTabs = tr
 
           {/* 버전 배지 + 로그아웃 */}
           <div className="flex flex-col items-end gap-1.5">
+            {userEmail && (
+              <span
+                className="text-xs font-semibold leading-none select-none"
+                style={{ color: 'rgba(255,255,255,0.95)' }}
+              >
+                재고관리자 · {userEmail}
+              </span>
+            )}
             <span
               className="text-[10px] leading-none select-none"
               style={{

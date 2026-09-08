@@ -4,9 +4,11 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function AdminHeader({ activeTab, setActiveTab }: {
+export default function AdminHeader({ activeTab, setActiveTab, userEmail, showTabs = true }: {
   activeTab: string
   setActiveTab: (tab: string) => void
+  userEmail?: string
+  showTabs?: boolean
 }) {
   const router = useRouter()
 
@@ -48,6 +50,14 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
 
           {/* 버전 배지 + 로그아웃 */}
           <div className="flex flex-col items-end gap-1.5">
+            {userEmail && (
+              <span
+                className="text-xs font-semibold leading-none select-none"
+                style={{ color: 'rgba(255,255,255,0.95)' }}
+              >
+                최종관리자 · {userEmail}
+              </span>
+            )}
             <span
               className="text-[10px] leading-none select-none"
               style={{
@@ -81,21 +91,23 @@ export default function AdminHeader({ activeTab, setActiveTab }: {
         </div>
 
         {/* 탭 네비게이션 */}
-        <nav className="flex gap-1 pb-0">
-          {tabs.map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${
-                activeTab === tab.key
-                  ? 'bg-white text-[#0A67A6]'
-                  : 'text-white/75 hover:text-white hover:bg-white/10'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+        {showTabs && (
+          <nav className="flex gap-1 pb-0">
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${
+                  activeTab === tab.key
+                    ? 'bg-white text-[#0A67A6]'
+                    : 'text-white/75 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+        )}
       </div>
     </header>
   )

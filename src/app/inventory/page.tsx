@@ -170,12 +170,12 @@ export default function InventoryPage() {
   if (accessState === 'denied') {
     return (
       <div className="min-h-screen bg-gray-100">
-        <InventoryHeader activeTab={activeTab} setActiveTab={setActiveTab} showTabs={false} />
+        <InventoryHeader activeTab={activeTab} setActiveTab={setActiveTab} userEmail={userEmail} showTabs={false} />
         <div className="flex items-center justify-center px-4" style={{ minHeight: 'calc(100vh - 88px)' }}>
           <div className="bg-white rounded-2xl shadow-lg p-8 max-w-sm w-full text-center">
             <div className="text-4xl mb-3">🚫</div>
             <h2 className="text-lg font-bold text-gray-800 mb-2">접근 권한이 없습니다</h2>
-            <p className="text-sm text-gray-500 mb-6">재고관리자 권한이 있는 계정으로 로그인해주세요.</p>
+            <p className="text-sm text-gray-500 mb-6">재고관리자 계정으로 로그인해주세요.</p>
             <button
               onClick={handleLogout}
               className="w-full py-3 bg-gray-700 text-white rounded-xl font-semibold hover:bg-gray-800 transition"
@@ -190,7 +190,7 @@ export default function InventoryPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <InventoryHeader activeTab={activeTab} setActiveTab={setActiveTab} />
+      <InventoryHeader activeTab={activeTab} setActiveTab={setActiveTab} userEmail={userEmail} />
 
       {/* ─── 재고 현황 탭 ─── */}
       {activeTab === 'stock' && (
