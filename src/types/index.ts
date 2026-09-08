@@ -123,3 +123,12 @@ export const CONSUMPTION_STATUS_COLOR: Record<ConsumptionStatus, string> = {
   pending: 'bg-orange-100 text-orange-700',
   confirmed: 'bg-green-100 text-green-700',
 }
+
+// ── 재고 현황 ──
+export interface InventoryItem {
+  item_name: string
+  spec: string | null
+  incoming: number   // 입고량 (정산완료 requests의 purchase_quantity 합계)
+  consumed: number    // 소모량 (confirmed consumption_records의 quantity 합계)
+  stock: number       // 현재고 = incoming - consumed
+}
