@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const receipt_number  = searchParams.get('receipt_number')
   const autocomplete    = searchParams.get('autocomplete')
+  const invAutocomplete = searchParams.get('inv_autocomplete')
   const requester_name  = searchParams.get('requester_name')
 
   // 자동완성
@@ -84,6 +85,30 @@ export async function GET(request: NextRequest) {
 
     const names = [...new Set((data || []).map((r: any) => r.item_name))].slice(0, 5)
     return NextResponse.json({ items: names })
+  }
+
+  // 재고관리 대상 자동완성 — is_inventory_item=true 정산완료 품목의 (물품명, 규격) 조합
+  if (invAutocomplete) {
+    const { data } = await supabase
+      .from('requests')
+      .select('item_name, spec')
+      .eq('is_inventory_item', true)
+      .eq('status', 'settled')
+      .ilike('item_name', `%${invAutocomplete}%`)
+      .limit(50)
+
+    const seen = new Set<string>()
+    const items: { item_name: string; spec: string | null }[] = []
+    for (const r of (data || []) as { item_name: string; spec: string | null }[]) {
+      const key = `${r.item_name}|||${r.spec || ''}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      items.push({ item_name: r.item_name, spec: r.spec })
+    }
+    items.sort((a, b) =>
+      a.item_name.localeCompare(b.item_name, 'ko') || (a.spec || '').localeCompare(b.spec || '', 'ko')
+    )
+    return NextResponse.json({ items: items.slice(0, 8) })
   }
 
   // 통합 검색 (이름 OR 물품명 OR 규격)

@@ -54,7 +54,7 @@ export default function RequestPage() {
     used_location: '',
     note: '',
   })
-  const [consAutocompleteItems, setConsAutocompleteItems] = useState<string[]>([])
+  const [consAutocompleteItems, setConsAutocompleteItems] = useState<{ item_name: string; spec: string | null }[]>([])
   const [showConsAutocomplete, setShowConsAutocomplete] = useState(false)
   const [consSubmitting, setConsSubmitting] = useState(false)
   const [consError, setConsError] = useState('')
@@ -138,7 +138,7 @@ export default function RequestPage() {
   }, [])
 
   useEffect(() => {
-    if (pageTab === 'inventory' && invAuth === 'granted') fetchInventory()
+    if (pageTab === 'consumption' || (pageTab === 'inventory' && invAuth === 'granted')) fetchInventory()
   }, [pageTab, invAuth, fetchInventory])
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,7 +172,7 @@ export default function RequestPage() {
     clearTimeout(consAutocompleteTimer.current)
     if (val.length < 1) { setConsAutocompleteItems([]); setShowConsAutocomplete(false); return }
     consAutocompleteTimer.current = setTimeout(async () => {
-      const res = await fetch(`/api/requests?autocomplete=${encodeURIComponent(val)}`)
+      const res = await fetch(`/api/requests?inv_autocomplete=${encodeURIComponent(val)}`)
       const data = await res.json()
       setConsAutocompleteItems(data.items || [])
       setShowConsAutocomplete(true)
@@ -663,10 +663,14 @@ export default function RequestPage() {
                     {consAutocompleteItems.map((item, i) => (
                       <li
                         key={i}
-                        onMouseDown={() => { setConsForm(p => ({ ...p, item_name: item })); setShowConsAutocomplete(false) }}
+                        onMouseDown={() => {
+                          setConsForm(p => ({ ...p, item_name: item.item_name, spec: item.spec || '' }))
+                          setShowConsAutocomplete(false)
+                        }}
                         className="px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer"
                       >
-                        {item}
+                        {item.item_name}
+                        {item.spec && <span className="text-gray-400"> ({item.spec})</span>}
                       </li>
                     ))}
                   </ul>
@@ -994,6 +998,48 @@ export default function RequestPage() {
                     </div>
                   )
                 })
+              )}
+            </div>
+          )}
+
+          {/* 소모내역 탭 전용: 재고관리 품목 현황 요약 카드 */}
+          {pageTab === 'consumption' && (
+            <div className="mt-6 bg-white p-4" style={{ border: '0.5px solid #E5E7EB', borderRadius: '8px' }}>
+              <h3 className="text-sm font-bold text-gray-700">📦 재고관리 품목 현황</h3>
+              <p className="text-xs text-gray-400 mt-0.5 mb-3">물품명 입력 시 아래 목록을 참고하세요</p>
+              {inventoryLoading ? (
+                <p className="text-xs text-gray-400 py-4 text-center">불러오는 중...</p>
+              ) : inventoryItems.length === 0 ? (
+                <p className="text-xs text-gray-400 py-4 text-center">재고관리 품목이 없습니다</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-gray-500 border-b border-gray-200">
+                        <th className="text-left py-1.5 font-semibold">물품명</th>
+                        <th className="text-left py-1.5 font-semibold">규격</th>
+                        <th className="text-right py-1.5 font-semibold">현재고</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventoryItems.map((item, i) => {
+                        const s = item.stock
+                        const color = s <= 0 ? '#DC2626' : s <= 3 ? '#EA580C' : '#16A34A'
+                        const label = s <= 0 ? '재고없음' : s <= 3 ? '부족' : null
+                        return (
+                          <tr key={`${item.item_name}-${item.spec}-${i}`} className="border-b border-gray-100 last:border-0">
+                            <td className="py-1.5 font-medium text-gray-700">{item.item_name}</td>
+                            <td className="py-1.5 text-gray-500">{item.spec || '-'}</td>
+                            <td className="py-1.5 text-right font-bold tabular-nums" style={{ color }}>
+                              {s}
+                              {label && <span className="ml-1 font-semibold">{label}</span>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           )}
