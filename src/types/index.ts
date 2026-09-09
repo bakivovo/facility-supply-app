@@ -14,6 +14,7 @@ export interface Request {
   request_photos: string[] | null
   purpose: string
   urgency: Urgency
+  is_inventory_item: boolean
   status: Status
   reject_reason: string | null
   vendor: string | null

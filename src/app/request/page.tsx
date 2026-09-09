@@ -1,9 +1,10 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useEffect, useRef } from 'react'
-import { UNITS, STATUS_LABEL, STATUS_COLOR, type Category } from '@/types'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { UNITS, STATUS_LABEL, STATUS_COLOR, type Category, type InventoryItem } from '@/types'
 import { uploadManyToStorage } from '@/lib/uploadToStorage'
+import { createClient } from '@/lib/supabase/client'
 
 function todayStr(): string {
   const d = new Date()
@@ -11,7 +12,7 @@ function todayStr(): string {
 }
 
 export default function RequestPage() {
-  const [pageTab, setPageTab] = useState<'request' | 'consumption'>('request')
+  const [pageTab, setPageTab] = useState<'request' | 'consumption' | 'inventory'>('request')
   const [categories, setCategories] = useState<Category[]>([])
   const [form, setForm] = useState({
     requester_name: '',
@@ -24,6 +25,7 @@ export default function RequestPage() {
     purchase_link: '',
     purpose: '',
     urgency: 'normal' as 'normal' | 'urgent' | 'relaxed',
+    is_inventory_item: false,
   })
   const [photos, setPhotos] = useState<File[]>([])
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
@@ -60,12 +62,85 @@ export default function RequestPage() {
   const [consToast, setConsToast] = useState(false)
   const consAutocompleteTimer = useRef<NodeJS.Timeout | undefined>(undefined)
 
+  // 재고 현황 (로그인 필요)
+  const [invAuth, setInvAuth] = useState<'checking' | 'anon' | 'denied' | 'granted'>('checking')
+  const [invEmail, setInvEmail] = useState('')
+  const [invRole, setInvRole] = useState<'inventory_manager' | 'final_manager'>('inventory_manager')
+  const [invLoginForm, setInvLoginForm] = useState({ email: '', password: '' })
+  const [invLoginError, setInvLoginError] = useState('')
+  const [invLoginLoading, setInvLoginLoading] = useState(false)
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
+  const [inventoryLoading, setInventoryLoading] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
   const autocompleteTimer = useRef<NodeJS.Timeout | undefined>(undefined)
 
   useEffect(() => {
     fetch('/api/categories').then(r => r.json()).then(d => setCategories(d.data || []))
   }, [])
+
+  // ── 재고 현황: 로그인 세션 확인 ──
+  const applyUserRole = useCallback((user: { email?: string; user_metadata?: Record<string, unknown> } | null) => {
+    if (!user) { setInvAuth('anon'); return }
+    setInvEmail(user.email || '')
+    const role = (user.user_metadata as { role?: string } | undefined)?.role
+    if (role === 'inventory_manager') {
+      setInvRole('inventory_manager')
+      setInvAuth('granted')
+    } else if (!role || role === 'final_manager') {
+      setInvRole('final_manager')
+      setInvAuth('granted')
+    } else {
+      setInvAuth('denied')
+    }
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => applyUserRole(user))
+  }, [applyUserRole])
+
+  const handleInvLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setInvLoginError('')
+    setInvLoginLoading(true)
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: invLoginForm.email,
+        password: invLoginForm.password,
+      })
+      if (error) throw error
+      setInvLoginForm({ email: '', password: '' })
+      applyUserRole(data.user)
+    } catch {
+      setInvLoginError('이메일 또는 비밀번호가 올바르지 않습니다.')
+    } finally {
+      setInvLoginLoading(false)
+    }
+  }
+
+  const handleInvLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    setInvEmail('')
+    setInvAuth('anon')
+  }
+
+  const fetchInventory = useCallback(async () => {
+    setInventoryLoading(true)
+    try {
+      const res = await fetch('/api/inventory?managed=1')
+      const data = await res.json()
+      setInventoryItems(data.data || [])
+    } finally {
+      setInventoryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (pageTab === 'inventory' && invAuth === 'granted') fetchInventory()
+  }, [pageTab, invAuth, fetchInventory])
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -225,7 +300,7 @@ export default function RequestPage() {
           <button
             onClick={() => {
               setSubmitResult(null)
-              setForm({ requester_name: '', category: '', category_code: '', item_name: '', spec: '', quantity: 1, unit: '개', purchase_link: '', purpose: '', urgency: 'normal' })
+              setForm({ requester_name: '', category: '', category_code: '', item_name: '', spec: '', quantity: 1, unit: '개', purchase_link: '', purpose: '', urgency: 'normal', is_inventory_item: false })
               setPhotos([])
               setPhotoPreviews([])
             }}
@@ -329,20 +404,22 @@ export default function RequestPage() {
         {/* ── 왼쪽: 탭 영역 ── */}
         <div className="w-full md:w-1/2 flex flex-col border-b md:border-b-0 md:border-r border-gray-200 bg-white min-h-0">
           {/* 탭 버튼 */}
-          <div className="border-b border-gray-200 px-5 pt-4 shrink-0">
-            <nav className="flex gap-1">
+          <div className="border-b border-gray-200 px-5 pt-3 shrink-0 bg-gray-50">
+            <nav className="flex gap-1.5">
               {[
                 { key: 'request' as const,     label: '📋 물품 요청' },
                 { key: 'consumption' as const, label: '📦 소모내역' },
+                { key: 'inventory' as const,   label: '📊 재고 현황' },
               ].map(tab => (
                 <button
                   key={tab.key}
                   onClick={() => setPageTab(tab.key)}
-                  className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition ${
+                  className={`px-4 py-2.5 text-sm font-semibold rounded-t-lg transition ${
                     pageTab === tab.key
-                      ? 'border-[#0A67A6] text-[#0A67A6]'
-                      : 'border-transparent text-gray-400 hover:text-gray-600'
+                      ? 'bg-[#0A67A6] text-white'
+                      : 'bg-white text-gray-500 hover:text-gray-700 border border-b-0 border-gray-200'
                   }`}
+                  style={{ borderBottom: pageTab === tab.key ? '3px solid #EDE900' : '3px solid transparent' }}
                 >
                   {tab.label}
                 </button>
@@ -539,6 +616,24 @@ export default function RequestPage() {
             </div>
           </div>
 
+          {/* 재고관리 대상 */}
+          <div>
+            <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-gray-300 px-4 py-3 hover:border-blue-400 transition">
+              <input
+                type="checkbox"
+                checked={form.is_inventory_item}
+                onChange={e => setForm(p => ({ ...p, is_inventory_item: e.target.checked }))}
+                className="mt-0.5 w-5 h-5 accent-[#0A67A6] shrink-0"
+              />
+              <span className="text-sm">
+                <span className="font-semibold text-gray-700">📦 재고관리 대상 물품입니다</span>
+                {form.is_inventory_item && (
+                  <span className="block text-xs text-[#0A67A6] mt-1">입고 후 재고에 자동 반영됩니다</span>
+                )}
+              </span>
+            </label>
+          </div>
+
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
           )}
@@ -670,6 +765,110 @@ export default function RequestPage() {
               </button>
             </form>
           )}
+
+          {pageTab === 'inventory' && invAuth === 'checking' && (
+            <div className="py-16 text-center text-gray-400 text-sm">로딩 중...</div>
+          )}
+
+          {pageTab === 'inventory' && invAuth === 'denied' && (
+            <div className="max-w-sm mx-auto text-center py-12">
+              <div className="text-4xl mb-3">🚫</div>
+              <h2 className="text-lg font-bold text-gray-800 mb-2">접근 권한이 없습니다</h2>
+              <p className="text-sm text-gray-500 mb-6">재고 현황은 재고관리자 또는 최종관리자만 열람할 수 있습니다.</p>
+              <button
+                onClick={handleInvLogout}
+                className="px-4 py-2.5 bg-gray-700 text-white rounded-xl text-sm font-semibold hover:bg-gray-800 transition"
+              >
+                다른 계정으로 로그인
+              </button>
+            </div>
+          )}
+
+          {pageTab === 'inventory' && invAuth === 'granted' && (() => {
+            const totalItems = inventoryItems.length
+            const shortageItems = inventoryItems.filter(i => i.stock <= 3).length
+            const normalItems = totalItems - shortageItems
+            return (
+              <div>
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h2 className="text-base font-bold text-gray-800">재고 현황</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {invRole === 'final_manager' ? '최종관리자' : '재고관리자'} · {invEmail}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={fetchInventory}
+                      className="text-xs font-medium text-gray-500 border border-gray-300 rounded-lg px-2.5 py-1 hover:bg-gray-50"
+                    >
+                      🔄
+                    </button>
+                    <button
+                      onClick={handleInvLogout}
+                      className="text-xs font-medium text-gray-500 border border-gray-300 rounded-lg px-2.5 py-1 hover:bg-gray-50"
+                    >
+                      로그아웃
+                    </button>
+                  </div>
+                </div>
+
+                {/* 요약 카드 */}
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-white border rounded-xl p-3" style={{ borderLeft: '3px solid #0A67A6', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                    <p className="text-[11px] font-medium text-gray-500 mb-1">전체 품목 수</p>
+                    <p className="text-lg font-bold text-gray-800">{totalItems}</p>
+                  </div>
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-3" style={{ borderLeft: '3px solid #C97A1E', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                    <p className="text-[11px] font-medium text-orange-700 mb-1">부족 품목 수</p>
+                    <p className="text-lg font-bold text-orange-700">{shortageItems}</p>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-3" style={{ borderLeft: '3px solid #2E9E5B', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                    <p className="text-[11px] font-medium text-green-700 mb-1">정상 품목 수</p>
+                    <p className="text-lg font-bold text-green-700">{normalItems}</p>
+                  </div>
+                </div>
+
+                {inventoryLoading ? (
+                  <div className="py-16 text-center text-gray-400 text-sm">불러오는 중...</div>
+                ) : inventoryItems.length === 0 ? (
+                  <div className="py-16 text-center text-gray-400 text-sm">재고 데이터가 없습니다.</div>
+                ) : (
+                  <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-3 py-2.5 text-left text-gray-600 font-semibold">물품명</th>
+                          <th className="px-3 py-2.5 text-left text-gray-600 font-semibold">규격</th>
+                          <th className="px-3 py-2.5 text-right text-gray-600 font-semibold">입고량</th>
+                          <th className="px-3 py-2.5 text-right text-gray-600 font-semibold">소모량</th>
+                          <th className="px-3 py-2.5 text-right text-gray-600 font-semibold">현재고</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {inventoryItems.map((item, i) => {
+                          const stockColor = item.stock <= 0 ? 'text-red-600' : item.stock <= 3 ? 'text-orange-600' : 'text-gray-800'
+                          return (
+                            <tr key={`${item.item_name}-${item.spec}-${i}`} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                              <td className="px-3 py-2.5 font-medium">{item.item_name}</td>
+                              <td className="px-3 py-2.5 text-gray-500 text-xs">{item.spec || '-'}</td>
+                              <td className="px-3 py-2.5 text-right tabular-nums text-gray-700">{item.incoming}</td>
+                              <td className="px-3 py-2.5 text-right tabular-nums text-gray-700">{item.consumed}</td>
+                              <td className={`px-3 py-2.5 text-right tabular-nums font-bold ${stockColor}`}>
+                                {item.stock}
+                                {item.stock <= 0 && <span className="ml-1 text-xs">🔴</span>}
+                                {item.stock > 0 && item.stock <= 3 && <span className="ml-1 text-xs">🟠</span>}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
           </div>
         </div>{/* /왼쪽 칼럼(탭 영역) */}
 
@@ -821,6 +1020,64 @@ export default function RequestPage() {
         </div>{/* /오른쪽 칼럼 */}
 
       </main>
+
+      {/* 재고 현황 로그인 모달 */}
+      {pageTab === 'inventory' && invAuth === 'anon' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl p-7 w-full max-w-sm">
+            <div className="flex items-start justify-between mb-5">
+              <div>
+                <div className="text-3xl mb-2">📊</div>
+                <h2 className="text-lg font-bold text-gray-800">재고 현황 로그인</h2>
+                <p className="text-xs text-gray-500 mt-1">재고관리자 또는 최종관리자 계정</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPageTab('request')}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleInvLogin} className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                <input
+                  type="email"
+                  value={invLoginForm.email}
+                  onChange={e => setInvLoginForm(p => ({ ...p, email: e.target.value }))}
+                  required
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+                <input
+                  type="password"
+                  value={invLoginForm.password}
+                  onChange={e => setInvLoginForm(p => ({ ...p, password: e.target.value }))}
+                  required
+                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {invLoginError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{invLoginError}</div>
+              )}
+
+              <button
+                type="submit"
+                disabled={invLoginLoading}
+                className="w-full py-3 bg-[#0A67A6] text-white rounded-xl font-bold text-base hover:brightness-95 transition disabled:opacity-60"
+              >
+                {invLoginLoading ? '로그인 중...' : '로그인'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* 소모내역 등록 완료 토스트 */}
       {consToast && (

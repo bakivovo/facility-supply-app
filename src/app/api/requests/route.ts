@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const {
       requester_name, category, category_code, item_name, spec,
-      quantity, unit, purchase_link, request_photos, purpose, urgency
+      quantity, unit, purchase_link, request_photos, purpose, urgency,
+      is_inventory_item
     } = body
 
     if (!requester_name || !category || !item_name || !purpose || !urgency) {
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
         request_photos: request_photos || null,
         purpose,
         urgency,
+        is_inventory_item: Boolean(is_inventory_item),
         status: 'new',
       })
       .select()

@@ -1,15 +1,24 @@
 import { getSupabaseAdmin } from '@/lib/supabase/apiClient'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 
 // 품목(물품명+규격) 단위 재고 집계
 // 입고량 = requests에서 status='settled'이고 purchase_quantity가 있는 건의 합계
 // 소모량 = consumption_records에서 status='confirmed'인 건의 quantity 합계
 // 현재고 = 입고량 - 소모량
-export async function GET() {
+//
+// ?managed=1 : 입고량 집계 시 is_inventory_item=true인 requests 건만 포함
+export async function GET(request: NextRequest) {
   const supabase = getSupabaseAdmin()
+  const managedOnly = new URL(request.url).searchParams.get('managed') === '1'
+
+  let reqQuery = supabase
+    .from('requests')
+    .select('item_name, spec, purchase_quantity')
+    .eq('status', 'settled')
+  if (managedOnly) reqQuery = reqQuery.eq('is_inventory_item', true)
 
   const [reqRes, consRes] = await Promise.all([
-    supabase.from('requests').select('item_name, spec, purchase_quantity').eq('status', 'settled'),
+    reqQuery,
     supabase.from('consumption_records').select('item_name, spec, quantity').eq('status', 'confirmed'),
   ])
 
