@@ -117,6 +117,10 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
   const [showReject, setShowReject] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  // 재고관리 대상 여부 (정산완료 처리 시 저장)
+  const [isInventoryItem, setIsInventoryItem] = useState(request.is_inventory_item ?? false)
+  const [invFlagStatus, setInvFlagStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
   // 납품완료 사진
   const [deliveryItems, setDeliveryItems] = useState<Array<{ url: string; file?: File }>>(
     (request.delivery_photo_urls || []).map(url => ({ url }))
@@ -249,6 +253,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
           purchase_date: purchaseDate || null,
           memo: memo || null,
           ...(nextStatus === 'settled' && {
+            is_inventory_item: isInventoryItem,
             delivery_photo_urls: deliveryUrls,
             receipt_photo_urls: receiptUrls,
             delivery_receipt_photo_urls: drUrls,
@@ -287,6 +292,25 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       if (!ok) throw new Error(data.error || '반려 처리 실패')
       onUpdate(data.data[0])
     } catch (err: any) { alert('오류: ' + err.message) } finally { setLoading(false) }
+  }
+
+  // ─── 재고관리 대상 여부만 저장 (정산완료 상태, 상태 변경 없음) ───
+  const handleSaveInventoryFlag = async () => {
+    setInvFlagStatus('saving')
+    try {
+      const res = await fetch('/api/admin/requests', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [request.id], is_inventory_item: isInventoryItem }),
+      })
+      const { ok, data } = await safeJson(res)
+      if (!ok) throw new Error(data.error || '저장 실패')
+      onUpdate(data.data[0])
+      setInvFlagStatus('saved')
+      setTimeout(() => setInvFlagStatus('idle'), 2500)
+    } catch {
+      setInvFlagStatus('error')
+      setTimeout(() => setInvFlagStatus('idle'), 4000)
+    }
   }
 
   // ─── 엑셀 다운로드 ───
@@ -615,6 +639,37 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
               className="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm hover:bg-orange-700 transition disabled:opacity-60">
               {excelLoading === 'receipt' ? '생성 중...' : '📥 영수증 엑셀'}
             </button>
+          )}
+        </div>
+      )}
+
+      {/* ══ 재고관리 대상 체크박스 (정산완료 처리 / 정산완료 건 수정) ══ */}
+      {(isOrdered || isSettled) && (
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isInventoryItem}
+              onChange={e => setIsInventoryItem(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-[#0A67A6] shrink-0"
+            />
+            <span className="text-sm text-gray-700">
+              📦 재고관리 대상 물품입니다{' '}
+              <span className="text-gray-400 font-normal">(체크 시 정산완료 후 재고에 자동 반영)</span>
+            </span>
+          </label>
+          {isSettled && (
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={handleSaveInventoryFlag}
+                disabled={invFlagStatus === 'saving' || isInventoryItem === (request.is_inventory_item ?? false)}
+                className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {invFlagStatus === 'saving' ? '저장 중...' : '재고관리 여부 저장'}
+              </button>
+              {invFlagStatus === 'saved' && <span className="text-sm text-green-600 font-medium">저장됨 ✓</span>}
+              {invFlagStatus === 'error' && <span className="text-sm text-red-500">저장 실패</span>}
+            </div>
           )}
         </div>
       )}

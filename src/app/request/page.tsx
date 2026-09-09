@@ -25,7 +25,6 @@ export default function RequestPage() {
     purchase_link: '',
     purpose: '',
     urgency: 'normal' as 'normal' | 'urgent' | 'relaxed',
-    is_inventory_item: false,
   })
   const [photos, setPhotos] = useState<File[]>([])
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([])
@@ -130,7 +129,7 @@ export default function RequestPage() {
   const fetchInventory = useCallback(async () => {
     setInventoryLoading(true)
     try {
-      const res = await fetch('/api/inventory?managed=1')
+      const res = await fetch('/api/inventory')
       const data = await res.json()
       setInventoryItems(data.data || [])
     } finally {
@@ -300,7 +299,7 @@ export default function RequestPage() {
           <button
             onClick={() => {
               setSubmitResult(null)
-              setForm({ requester_name: '', category: '', category_code: '', item_name: '', spec: '', quantity: 1, unit: '개', purchase_link: '', purpose: '', urgency: 'normal', is_inventory_item: false })
+              setForm({ requester_name: '', category: '', category_code: '', item_name: '', spec: '', quantity: 1, unit: '개', purchase_link: '', purpose: '', urgency: 'normal' })
               setPhotos([])
               setPhotoPreviews([])
             }}
@@ -614,24 +613,6 @@ export default function RequestPage() {
                 </button>
               ))}
             </div>
-          </div>
-
-          {/* 재고관리 대상 */}
-          <div>
-            <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-gray-300 px-4 py-3 hover:border-blue-400 transition">
-              <input
-                type="checkbox"
-                checked={form.is_inventory_item}
-                onChange={e => setForm(p => ({ ...p, is_inventory_item: e.target.checked }))}
-                className="mt-0.5 w-5 h-5 accent-[#0A67A6] shrink-0"
-              />
-              <span className="text-sm">
-                <span className="font-semibold text-gray-700">📦 재고관리 대상 물품입니다</span>
-                {form.is_inventory_item && (
-                  <span className="block text-xs text-[#0A67A6] mt-1">입고 후 재고에 자동 반영됩니다</span>
-                )}
-              </span>
-            </label>
           </div>
 
           {error && (
