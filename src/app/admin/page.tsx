@@ -44,6 +44,7 @@ export default function AdminPage() {
   const [requests, setRequests] = useState<Request[]>([])
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [inventoryOnly, setInventoryOnly] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [bulkLoading, setBulkLoading] = useState(false)
@@ -566,6 +567,7 @@ export default function AdminPage() {
   const q = searchQuery.trim().toLowerCase()
   const filteredRequests = yearMonthFiltered.filter(r => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false
+    if (inventoryOnly && !r.is_inventory_item) return false
     if (q) {
       const hit = [r.receipt_number, r.item_name, r.spec, r.requester_name, r.vendor, r.memo]
         .some(field => field?.toLowerCase().includes(q))
@@ -743,6 +745,15 @@ export default function AdminPage() {
               </button>
             ))}
 
+            <button
+              onClick={() => setInventoryOnly(v => !v)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                inventoryOnly ? 'bg-[#0A67A6] text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'
+              }`}
+            >
+              📦 재고관리
+            </button>
+
             <button onClick={fetchAll} className="ml-auto px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
           </div>
 
@@ -867,6 +878,14 @@ export default function AdminPage() {
                             }
                             return null
                           })()}
+                          {req.is_inventory_item && (
+                            <span
+                              className="ml-1 whitespace-nowrap"
+                              style={{ background: '#E6F1FB', color: '#0C447C', fontSize: '10px', padding: '2px 6px', borderRadius: '999px' }}
+                            >
+                              📦 재고
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-3 hidden md:table-cell text-gray-600">{req.category}</td>
                         <td className="px-3 py-3">
