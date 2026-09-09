@@ -62,6 +62,10 @@ export default function InventoryPage() {
   const [viewAvailableYears, setViewAvailableYears] = useState<string[]>(() => [String(new Date().getFullYear()).slice(2)])
   const [viewExcelLoading, setViewExcelLoading] = useState(false)
 
+  // 재고현황 탭 · 섹션 B(월별 소모내역)
+  const [stockConsExcelLoading, setStockConsExcelLoading] = useState(false)
+  const [confirmingConsId, setConfirmingConsId] = useState<string | null>(null)
+
   // ── 로그인 + 권한 체크 ──
   useEffect(() => {
     const supabase = createClient()
@@ -122,8 +126,70 @@ export default function InventoryPage() {
   }, [])
 
   useEffect(() => {
-    if (accessState === 'granted' && activeTab === 'view') fetchViewRecords()
+    // 소모내역 열람 탭 + 재고현황 탭(섹션 B) 모두에서 사용
+    if (accessState === 'granted' && (activeTab === 'view' || activeTab === 'stock')) fetchViewRecords()
   }, [accessState, activeTab, fetchViewRecords])
+
+  // ── 소모내역 확인 처리 (재고현황 섹션 B) ──
+  const handleConfirmConsumption = async (rec: ConsumptionRecord) => {
+    setConfirmingConsId(rec.id)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const confirmedBy = user?.email || userEmail || '재고관리자'
+      const confirmedAt = new Date().toISOString()
+
+      const res = await fetch('/api/consumption', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [rec.id], status: 'confirmed', confirmed_by: confirmedBy, confirmed_at: confirmedAt }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '확인 처리 실패')
+
+      const updated: ConsumptionRecord = data.data?.[0] ?? { ...rec, status: 'confirmed', confirmed_by: confirmedBy, confirmed_at: confirmedAt }
+      setViewRecords(prev => prev.map(r => r.id === rec.id ? updated : r))
+      fetchInventory()
+
+      // 관리대장 시트 반영 (소모내역 열람 탭 확인 처리와 동일)
+      fetch('/api/admin/sheet-webhook', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'consumption',
+          item_name: updated.item_name,
+          spec: updated.spec || '',
+          quantity: updated.quantity,
+          used_date: updated.used_date,
+          used_location: updated.used_location || '',
+          input_by: updated.input_by || '',
+          confirmed_at: updated.confirmed_at || confirmedAt,
+          note: updated.note || '',
+        }),
+      }).catch(() => {})
+    } catch (err) {
+      alert('오류: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setConfirmingConsId(null)
+    }
+  }
+
+  const handleStockConsExcel = async () => {
+    setStockConsExcelLoading(true)
+    try {
+      const year = 2000 + parseInt(viewYearFilter, 10)
+      const month = viewMonthFilter === 'all' ? new Date().getMonth() + 1 : parseInt(viewMonthFilter, 10)
+      const res = await fetch(`/api/excel/inventory-consumption?year=${year}&month=${month}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || `서버 오류 (${res.status})`)
+      }
+      downloadBlob(await res.blob(), `소모내역_${year}년${month}월.xlsx`)
+    } catch (err) {
+      alert('엑셀 생성 오류: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setStockConsExcelLoading(false)
+    }
+  }
 
   // ── 소모내역 입력 ──
   const handleItemNameChange = (val: string) => {
@@ -209,6 +275,15 @@ export default function InventoryPage() {
     return true
   })
 
+  // ── 재고현황 탭 섹션 B: 월별 소모내역 (연·월만 필터) ──
+  const monthlyConsRecords = viewRecords.filter(r => {
+    const yy = r.used_date?.slice(2, 4)
+    const mm = r.used_date ? String(parseInt(r.used_date.slice(5, 7))) : ''
+    if (yy !== viewYearFilter) return false
+    if (viewMonthFilter !== 'all' && mm !== viewMonthFilter) return false
+    return true
+  })
+
   // ── 재고 요약 ──
   const totalItems = inventoryItems.length
   const shortageItems = inventoryItems.filter(i => i.stock <= 3).length
@@ -252,11 +327,13 @@ export default function InventoryPage() {
 
       {/* ─── 재고 현황 탭 ─── */}
       {activeTab === 'stock' && (
-        <div className="max-w-6xl mx-auto px-4 py-6">
+        <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+          {/* ══ 섹션 A: 전체 재고현황 ══ */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             <div className="p-6 pb-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-gray-800">재고 현황</h2>
+                <h2 className="text-lg font-bold text-gray-800">전체 재고현황</h2>
                 <button onClick={fetchInventory} className="px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
               </div>
 
@@ -295,7 +372,7 @@ export default function InventoryPage() {
                   </thead>
                   <tbody>
                     {inventoryItems.map((item, i) => {
-                      const stockColor = item.stock <= 0 ? 'text-red-600' : item.stock <= 3 ? 'text-orange-600' : 'text-gray-800'
+                      const stockColor = item.stock <= 0 ? 'text-red-600' : item.stock <= 3 ? 'text-orange-600' : 'text-green-600'
                       return (
                         <tr key={`${item.item_name}-${item.spec}-${i}`} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium">{item.item_name}</td>
@@ -304,12 +381,109 @@ export default function InventoryPage() {
                           <td className="px-4 py-3 text-right tabular-nums text-gray-700">{item.consumed}</td>
                           <td className={`px-4 py-3 text-right tabular-nums font-bold ${stockColor}`}>
                             {item.stock}
-                            {item.stock <= 0 && <span className="ml-1 text-xs font-semibold">🔴</span>}
-                            {item.stock > 0 && item.stock <= 3 && <span className="ml-1 text-xs font-semibold">🟠</span>}
+                            {item.stock <= 0 && <span className="ml-1 text-xs font-semibold">재고없음</span>}
+                            {item.stock > 0 && item.stock <= 3 && <span className="ml-1 text-xs font-semibold">부족</span>}
                           </td>
                         </tr>
                       )
                     })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* ══ 섹션 B: 월별 소모내역 현황 ══ */}
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="p-6 pb-4">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h2 className="text-lg font-bold text-gray-800">월별 소모내역 현황</h2>
+                <button
+                  onClick={handleStockConsExcel}
+                  disabled={stockConsExcelLoading}
+                  style={{ backgroundColor: '#2E9E5B' }}
+                  className="px-3 py-1.5 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
+                >
+                  {stockConsExcelLoading ? '생성 중...' : '📥 엑셀 다운로드'}
+                </button>
+              </div>
+
+              {/* 연·월 필터 */}
+              <div className="flex gap-2 flex-wrap items-center">
+                <select
+                  value={viewYearFilter}
+                  onChange={e => setViewYearFilter(e.target.value)}
+                  className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {viewAvailableYears.map(yy => (
+                    <option key={yy} value={yy}>{`20${yy}`}년</option>
+                  ))}
+                </select>
+                <select
+                  value={viewMonthFilter}
+                  onChange={e => setViewMonthFilter(e.target.value)}
+                  className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">전체 월</option>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={String(m)}>{m}월</option>
+                  ))}
+                </select>
+                <button onClick={fetchViewRecords} className="ml-auto px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
+              </div>
+            </div>
+
+            {viewLoading ? (
+              <div className="py-16 text-center text-gray-400">불러오는 중...</div>
+            ) : monthlyConsRecords.length === 0 ? (
+              <div className="py-16 text-center text-gray-400">선택한 기간의 소모내역이 없습니다.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-t border-b border-gray-200">
+                    <tr>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">등록일</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">이름</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">물품명</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">규격</th>
+                      <th className="px-3 py-3 text-right text-gray-600 font-semibold">수량</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">사용일</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">사용처</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">메모</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold" style={{ minWidth: '84px' }}>상태</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyConsRecords.map(rec => (
+                      <tr key={rec.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-3 text-xs text-gray-500">{rec.created_at.slice(0, 10)}</td>
+                        <td className="px-3 py-3 text-gray-600">{rec.input_by}</td>
+                        <td className="px-3 py-3 font-medium">{rec.item_name}</td>
+                        <td className="px-3 py-3 text-gray-500 text-xs">{rec.spec || '-'}</td>
+                        <td className="px-3 py-3 text-right tabular-nums text-gray-700 text-xs">{rec.quantity}</td>
+                        <td className="px-3 py-3 text-xs">{rec.used_date}</td>
+                        <td className="px-3 py-3 text-gray-600 text-xs">{rec.used_location || '-'}</td>
+                        <td className="px-3 py-3 text-gray-600 text-xs">{rec.note || '-'}</td>
+                        <td className="px-3 py-3" style={{ minWidth: '84px' }}>
+                          <span className={`rounded-full text-xs font-semibold ${CONSUMPTION_STATUS_COLOR[rec.status]}`}
+                            style={{ padding: '3px 8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                            {CONSUMPTION_STATUS_LABEL[rec.status]}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          {rec.status === 'pending' && (
+                            <button
+                              onClick={() => handleConfirmConsumption(rec)}
+                              disabled={confirmingConsId === rec.id}
+                              className="px-3 py-1.5 bg-[#0A67A6] text-white rounded-lg text-xs font-semibold hover:brightness-90 transition disabled:opacity-60 whitespace-nowrap"
+                            >
+                              {confirmingConsId === rec.id ? '처리 중...' : '확인 처리'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
