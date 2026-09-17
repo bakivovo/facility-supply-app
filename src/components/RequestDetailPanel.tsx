@@ -245,6 +245,8 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
         body: JSON.stringify({
           ids: [request.id],
           status: nextStatus,
+          item_name: editItemName || null,
+          spec: editSpec || null,
           vendor: vendorInput || null,
           unit_price: unitPrice ? parseInt(unitPrice) : null,
           purchase_quantity: purchaseQty ? parseInt(purchaseQty) : null,
@@ -262,6 +264,7 @@ export default function RequestDetailPanel({ request, vendors, onUpdate, onClose
       })
       const { ok, data } = await safeJson(res)
       if (!ok) throw new Error(data.error || '상태 변경 실패')
+      setEditingField(null)
       onUpdate(data.data[0])
 
       if (nextStatus === 'settled') {
