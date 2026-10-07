@@ -44,6 +44,12 @@ export default function RequestPage() {
   const [lookupMonthFilter, setLookupMonthFilter] = useState('all')
   const [lookupAvailableYears, setLookupAvailableYears] = useState<string[]>([])
 
+  // 신규 상태 요청 수정 (물품명·규격·수량)
+  const [editingReceipt, setEditingReceipt] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({ item_name: '', spec: '', quantity: 1 })
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+
   // 소모내역
   const [consForm, setConsForm] = useState({
     input_by: '',
@@ -268,6 +274,34 @@ export default function RequestPage() {
       setLookupError(err.message)
     } finally {
       setLookupLoading(false)
+    }
+  }
+
+  const startEdit = (r: any) => {
+    setEditingReceipt(r.receipt_number)
+    setEditForm({ item_name: r.item_name || '', spec: r.spec || '', quantity: r.quantity || 1 })
+    setEditError('')
+  }
+
+  const handleEditSave = async (receiptNumber: string) => {
+    setEditError('')
+    if (!editForm.item_name.trim()) { setEditError('물품명을 입력해주세요.'); return }
+    if (editForm.quantity < 1) { setEditError('수량은 1 이상이어야 합니다.'); return }
+    setEditSaving(true)
+    try {
+      const res = await fetch('/api/requests', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipt_number: receiptNumber, ...editForm }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || '수정 실패')
+      setLookupResults(prev => prev && prev.map(r => r.receipt_number === receiptNumber ? { ...r, ...data.data } : r))
+      setEditingReceipt(null)
+    } catch (err: any) {
+      setEditError(err.message || '오류가 발생했습니다.')
+    } finally {
+      setEditSaving(false)
     }
   }
 
@@ -924,17 +958,79 @@ export default function RequestPage() {
                         </span>
                       </div>
 
-                      {/* 물품명 + 규격 */}
-                      <p className="font-semibold text-gray-800 text-sm">
-                        {r.item_name}
-                        {r.spec && <span className="text-gray-400 font-normal ml-1.5 text-xs">({r.spec})</span>}
-                      </p>
+                      {editingReceipt === r.receipt_number ? (
+                        /* 수정 모드 — 신규 상태에서만 진입 가능 */
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={editForm.item_name}
+                            onChange={e => setEditForm(p => ({ ...p, item_name: e.target.value }))}
+                            placeholder="물품명"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <input
+                            type="text"
+                            value={editForm.spec}
+                            onChange={e => setEditForm(p => ({ ...p, spec: e.target.value }))}
+                            placeholder="규격 (선택)"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={1}
+                              value={editForm.quantity}
+                              onChange={e => setEditForm(p => ({ ...p, quantity: parseInt(e.target.value) || 1 }))}
+                              className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-500">{r.unit}</span>
+                          </div>
+                          {editError && <p className="text-xs text-red-600">{editError}</p>}
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditSave(r.receipt_number)}
+                              disabled={editSaving}
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition disabled:opacity-60"
+                            >
+                              {editSaving ? '저장 중...' : '저장'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingReceipt(null)}
+                              disabled={editSaving}
+                              className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-xs hover:bg-gray-200 transition"
+                            >
+                              취소
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {/* 물품명 + 규격 */}
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-gray-800 text-sm">
+                              {r.item_name}
+                              {r.spec && <span className="text-gray-400 font-normal ml-1.5 text-xs">({r.spec})</span>}
+                            </p>
+                            {r.status === 'new' && (
+                              <button
+                                type="button"
+                                onClick={() => startEdit(r)}
+                                className="shrink-0 px-2 py-0.5 border border-gray-300 text-gray-600 rounded-md text-xs hover:bg-gray-50 transition"
+                              >
+                                ✏️ 수정
+                              </button>
+                            )}
+                          </div>
 
-                      {/* 기본 정보 행 */}
-                      <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
-                        <span>접수일 {r.created_at?.slice(0, 10)}</span>
-                        <span>요청수량 {r.quantity}{r.unit}</span>
-                      </div>
+                          {/* 기본 정보 행 */}
+                          <div className="flex gap-3 mt-1.5 text-xs text-gray-500">
+                            <span>접수일 {r.created_at?.slice(0, 10)}</span>
+                            <span>요청수량 {r.quantity}{r.unit}</span>
+                          </div>
+                        </>
+                      )}
 
                       {/* 용도 */}
                       {r.purpose && (

@@ -67,6 +67,50 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// 신청자 본인 수정 — 신규(new) 상태일 때만 물품명·규격·수량 변경 허용
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = getSupabaseAdmin()
+    const { receipt_number, item_name, spec, quantity } = await request.json()
+
+    if (!receipt_number) {
+      return NextResponse.json({ error: '접수번호가 필요합니다.' }, { status: 400 })
+    }
+    const name = typeof item_name === 'string' ? item_name.trim() : ''
+    if (!name) {
+      return NextResponse.json({ error: '물품명을 입력해주세요.' }, { status: 400 })
+    }
+    const qty = Number(quantity)
+    if (!Number.isInteger(qty) || qty < 1) {
+      return NextResponse.json({ error: '수량은 1 이상이어야 합니다.' }, { status: 400 })
+    }
+
+    // status='new' 조건을 UPDATE에 포함시켜 검토 시작과의 경합에서도 안전하게 차단
+    const { data, error } = await supabase
+      .from('requests')
+      .update({
+        item_name: name,
+        spec: typeof spec === 'string' && spec.trim() ? spec.trim() : null,
+        quantity: qty,
+      })
+      .eq('receipt_number', String(receipt_number).trim())
+      .eq('status', 'new')
+      .select('receipt_number, status, item_name, spec, quantity, unit')
+
+    if (error) throw error
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: '신규 상태의 요청만 수정할 수 있습니다. 이미 검토가 시작되었을 수 있습니다.' },
+        { status: 409 }
+      )
+    }
+    return NextResponse.json({ success: true, data: data[0] })
+  } catch (err: any) {
+    console.error('요청 수정 오류:', err)
+    return NextResponse.json({ error: err.message || '서버 오류가 발생했습니다.' }, { status: 500 })
+  }
+}
+
 export async function GET(request: NextRequest) {
   const supabase = getSupabaseAdmin()
   const { searchParams } = new URL(request.url)
