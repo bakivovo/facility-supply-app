@@ -22,7 +22,6 @@ export default function InventoryHeader({ activeTab, setActiveTab, userEmail, ro
   const tabs = [
     { key: 'stock',       label: '📦 재고 현황' },
     { key: 'input',       label: '📝 소모내역 입력' },
-    { key: 'view',        label: '📋 소모내역 열람' },
   ]
 
   return (

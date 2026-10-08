@@ -60,12 +60,11 @@ export default function RequestPage() {
     used_location: '',
     note: '',
   })
-  const [consAutocompleteItems, setConsAutocompleteItems] = useState<string[]>([])
   const [showConsAutocomplete, setShowConsAutocomplete] = useState(false)
+  const [consSelected, setConsSelected] = useState(false)
   const [consSubmitting, setConsSubmitting] = useState(false)
   const [consError, setConsError] = useState('')
   const [consToast, setConsToast] = useState(false)
-  const consAutocompleteTimer = useRef<NodeJS.Timeout | undefined>(undefined)
 
   // 재고 현황 (로그인 필요)
   const [invAuth, setInvAuth] = useState<'checking' | 'anon' | 'denied' | 'granted'>('checking')
@@ -144,7 +143,7 @@ export default function RequestPage() {
   }, [])
 
   useEffect(() => {
-    if (pageTab === 'inventory' && invAuth === 'granted') fetchInventory()
+    if ((pageTab === 'inventory' && invAuth === 'granted') || pageTab === 'consumption') fetchInventory()
   }, [pageTab, invAuth, fetchInventory])
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,23 +172,36 @@ export default function RequestPage() {
     }, 250)
   }
 
+  const itemLabel = (i: Pick<InventoryItem, 'item_name' | 'spec'>) =>
+    i.spec ? `${i.item_name} (${i.spec})` : i.item_name
+
+  // 소모내역은 재고관리 대상 품목 목록에서 선택한 값만 허용 — 직접 입력하면 선택이 해제된다
   const handleConsItemNameChange = (val: string) => {
-    setConsForm(prev => ({ ...prev, item_name: val }))
-    clearTimeout(consAutocompleteTimer.current)
-    if (val.length < 1) { setConsAutocompleteItems([]); setShowConsAutocomplete(false); return }
-    consAutocompleteTimer.current = setTimeout(async () => {
-      const res = await fetch(`/api/requests?autocomplete=${encodeURIComponent(val)}`)
-      const data = await res.json()
-      setConsAutocompleteItems(data.items || [])
-      setShowConsAutocomplete(true)
-    }, 250)
+    setConsForm(prev => ({ ...prev, item_name: val, spec: '' }))
+    setConsSelected(false)
+    setShowConsAutocomplete(true)
   }
+
+  const selectConsItem = (item: Pick<InventoryItem, 'item_name' | 'spec'>) => {
+    setConsForm(prev => ({ ...prev, item_name: item.item_name, spec: item.spec || '' }))
+    setConsSelected(true)
+    setShowConsAutocomplete(false)
+  }
+
+  const consKeyword = consForm.item_name.trim().toLowerCase()
+  const consMatches = consSelected || !consKeyword
+    ? inventoryItems
+    : inventoryItems.filter(i => itemLabel(i).toLowerCase().includes(consKeyword))
 
   const handleConsSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setConsError('')
     if (!consForm.input_by || !consForm.item_name || !consForm.quantity || !consForm.used_date) {
       setConsError('필수 항목을 모두 입력해주세요.')
+      return
+    }
+    if (!consSelected) {
+      setConsError('재고관리 대상 물품만 입력 가능합니다. 목록에서 물품을 선택해주세요.')
       return
     }
     if (consForm.quantity < 1) {
@@ -206,6 +218,8 @@ export default function RequestPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || '등록 실패')
       setConsForm({ input_by: '', item_name: '', spec: '', quantity: 1, used_date: todayStr(), used_location: '', note: '' })
+      setConsSelected(false)
+      fetchInventory()
       setConsToast(true)
       setTimeout(() => setConsToast(false), 3000)
     } catch (err: any) {
@@ -682,40 +696,49 @@ export default function RequestPage() {
               {/* 물품명 + 자동완성 */}
               <div className="relative">
                 <label className="block text-sm font-semibold text-gray-700 mb-1">물품명 <span className="text-red-500">*</span></label>
-                <p className="text-xs text-gray-400 mb-1">(우측 조회 목록에서 물품명·규격을 참고하세요)</p>
+                <p className="text-xs text-gray-400 mb-1">(우측 재고관리 품목 목록을 클릭하거나, 아래에서 검색해 선택하세요)</p>
                 <input
                   type="text"
                   value={consForm.item_name}
                   onChange={e => handleConsItemNameChange(e.target.value)}
                   onBlur={() => setTimeout(() => setShowConsAutocomplete(false), 150)}
-                  onFocus={() => consAutocompleteItems.length > 0 && setShowConsAutocomplete(true)}
-                  placeholder="목록에 없으면 직접 입력하세요"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onFocus={() => setShowConsAutocomplete(true)}
+                  placeholder="물품명을 검색해 목록에서 선택하세요"
+                  className={`w-full border rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    consSelected ? 'border-green-400 bg-green-50' : 'border-gray-300'
+                  }`}
                 />
-                {showConsAutocomplete && consAutocompleteItems.length > 0 && (
-                  <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-xl shadow-lg mt-1 overflow-hidden">
-                    {consAutocompleteItems.map((item, i) => (
+                {showConsAutocomplete && consMatches.length > 0 && (
+                  <ul className="absolute z-10 w-full max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-lg mt-1">
+                    {consMatches.map((item, i) => (
                       <li
-                        key={i}
-                        onMouseDown={() => { setConsForm(p => ({ ...p, item_name: item })); setShowConsAutocomplete(false) }}
+                        key={`${item.item_name}-${item.spec}-${i}`}
+                        onMouseDown={() => selectConsItem(item)}
                         className="px-4 py-3 text-sm hover:bg-blue-50 cursor-pointer"
                       >
-                        {item}
+                        {itemLabel(item)}
                       </li>
                     ))}
                   </ul>
                 )}
+                {!consSelected && consForm.item_name.trim() && (
+                  consMatches.length === 0 ? (
+                    <p className="mt-1.5 text-xs font-medium text-red-600">재고관리 대상 물품만 입력 가능합니다</p>
+                  ) : (
+                    <p className="mt-1.5 text-xs text-gray-500">목록에서 물품을 선택해주세요</p>
+                  )
+                )}
               </div>
 
-              {/* 규격 */}
+              {/* 규격 — 선택한 물품에서 자동 입력 */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">규격 <span className="text-gray-400 font-normal text-xs">(선택)</span></label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">규격 <span className="text-gray-400 font-normal text-xs">(물품 선택 시 자동 입력)</span></label>
                 <input
                   type="text"
                   value={consForm.spec}
-                  onChange={e => setConsForm(p => ({ ...p, spec: e.target.value }))}
-                  placeholder="크기·용량·모델명 등"
-                  className="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  readOnly
+                  placeholder="-"
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-base bg-gray-50 text-gray-600 cursor-default focus:outline-none"
                 />
               </div>
 
@@ -887,7 +910,59 @@ export default function RequestPage() {
           </div>
         </div>{/* /왼쪽 칼럼(탭 영역) */}
 
-        {/* ── 오른쪽: 내 요청 조회 (탭과 무관하게 항상 고정) ── */}
+        {/* ── 오른쪽: 소모내역 탭이면 재고관리 품목 현황, 그 외에는 내 요청 조회 ── */}
+        {pageTab === 'consumption' ? (
+        <div className="w-full md:w-1/2 overflow-y-auto px-5 py-6 bg-gray-50">
+          <div className="max-w-lg mx-auto">
+            <h2 className="text-base font-bold text-gray-700 mb-1">📦 재고관리 품목 현황</h2>
+            <p className="text-xs text-gray-500 mb-3">아래 목록에서 소모한 물품을 선택하세요</p>
+
+            {inventoryLoading && inventoryItems.length === 0 ? (
+              <div className="py-12 text-center text-gray-400 text-sm">불러오는 중...</div>
+            ) : inventoryItems.length === 0 ? (
+              <div className="py-12 text-center text-gray-400 text-sm">등록된 재고관리 품목이 없습니다.</div>
+            ) : (
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden" style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-3 py-2.5 text-left text-gray-600 font-semibold">물품명</th>
+                      <th className="px-3 py-2.5 text-left text-gray-600 font-semibold">규격</th>
+                      <th className="px-3 py-2.5 text-right text-gray-600 font-semibold">현재고</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {inventoryItems.map((item, i) => {
+                      const isPicked = consSelected && consForm.item_name === item.item_name && consForm.spec === (item.spec || '')
+                      return (
+                        <tr
+                          key={`${item.item_name}-${item.spec}-${i}`}
+                          onClick={() => selectConsItem(item)}
+                          className={`border-b border-gray-100 last:border-0 cursor-pointer transition ${
+                            isPicked ? 'bg-blue-50' : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <td className="px-3 py-2.5 font-medium">{item.item_name}</td>
+                          <td className="px-3 py-2.5 text-gray-500 text-xs">{item.spec || '-'}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">
+                            {item.stock <= 0 ? (
+                              <span className="font-bold text-red-600">재고없음</span>
+                            ) : item.stock <= 3 ? (
+                              <span className="font-bold text-orange-600">부족 ({item.stock})</span>
+                            ) : (
+                              <span className="font-bold text-green-600">{item.stock}</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+        ) : (
         <div className="w-full md:w-1/2 overflow-y-auto px-5 py-6 bg-gray-50">
           <div className="max-w-lg mx-auto">
           <h2 className="text-base font-bold text-gray-700 mb-1">내 요청 조회</h2>
@@ -1094,7 +1169,8 @@ export default function RequestPage() {
             </div>
           )}
           </div>
-        </div>{/* /오른쪽 칼럼 */}
+        </div>
+        )}{/* /오른쪽 칼럼 */}
 
       </main>
 

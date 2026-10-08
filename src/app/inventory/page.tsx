@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { Fragment, useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import InventoryHeader from '@/components/InventoryHeader'
 import ConsumptionDetailPanel from '@/components/ConsumptionDetailPanel'
+import { confirmConsumptionRecord } from '@/lib/confirmConsumption'
 import type { ConsumptionRecord, InventoryItem } from '@/types'
 import { CONSUMPTION_STATUS_LABEL, CONSUMPTION_STATUS_COLOR } from '@/types'
 
@@ -61,6 +62,8 @@ export default function InventoryPage() {
   const [viewStatusFilter, setViewStatusFilter] = useState('all')
   const [viewAvailableYears, setViewAvailableYears] = useState<string[]>(() => [String(new Date().getFullYear()).slice(2)])
   const [viewExcelLoading, setViewExcelLoading] = useState(false)
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+  const [toastMsg, setToastMsg] = useState('등록되었습니다')
 
   // ── 로그인 + 권한 체크 ──
   useEffect(() => {
@@ -83,6 +86,12 @@ export default function InventoryPage() {
       }
     })
   }, [router])
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg)
+    setToastVisible(true)
+    setTimeout(() => setToastVisible(false), 3000)
+  }
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -122,7 +131,7 @@ export default function InventoryPage() {
   }, [])
 
   useEffect(() => {
-    if (accessState === 'granted' && activeTab === 'view') fetchViewRecords()
+    if (accessState === 'granted' && activeTab === 'stock') fetchViewRecords()
   }, [accessState, activeTab, fetchViewRecords])
 
   // ── 소모내역 입력 ──
@@ -159,8 +168,7 @@ export default function InventoryPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || '등록 실패')
       setConsForm({ item_name: '', spec: '', quantity: 1, used_date: todayStr(), used_location: '', note: '' })
-      setToastVisible(true)
-      setTimeout(() => setToastVisible(false), 3000)
+      showToast('등록되었습니다')
     } catch (err: any) {
       setSubmitError(err.message || '오류가 발생했습니다.')
     } finally {
@@ -172,8 +180,8 @@ export default function InventoryPage() {
     setViewExcelLoading(true)
     try {
       const year = 2000 + parseInt(viewYearFilter, 10)
-      const month = viewMonthFilter === 'all' ? new Date().getMonth() + 1 : parseInt(viewMonthFilter, 10)
-      const res = await fetch(`/api/excel/consumption?year=${year}&month=${month}`)
+      const month = parseInt(viewMonthFilter, 10)
+      const res = await fetch(`/api/excel/consumption-stock?year=${year}&month=${month}`)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error || `서버 오류 (${res.status})`)
@@ -187,16 +195,35 @@ export default function InventoryPage() {
   }
 
   // ── 소모내역 열람: 최종관리자 전용 편집 핸들러 ──
+  // 확인/되돌리기/수정/삭제는 소모량(재고)에 영향을 주므로 재고 현황도 함께 갱신한다
   const handleViewUpdate = (updated: ConsumptionRecord) => {
     setViewRecords(prev => prev.map(r => r.id === updated.id ? updated : r))
     setExpandedViewId(null)
+    fetchInventory()
   }
   const handleViewFieldSave = (updated: ConsumptionRecord) => {
     setViewRecords(prev => prev.map(r => r.id === updated.id ? updated : r))
+    fetchInventory()
   }
   const handleViewDelete = (id: string) => {
     setViewRecords(prev => prev.filter(r => r.id !== id))
     setExpandedViewId(null)
+    fetchInventory()
+  }
+
+  // 목록에서 바로 확인 처리 (시트 웹훅 포함)
+  const handleQuickConfirm = async (rec: ConsumptionRecord) => {
+    setConfirmingId(rec.id)
+    try {
+      const { record } = await confirmConsumptionRecord(rec.id)
+      setViewRecords(prev => prev.map(r => r.id === record.id ? record : r))
+      fetchInventory()
+      showToast('확인 처리되었습니다')
+    } catch (err: any) {
+      alert('오류: ' + err.message)
+    } finally {
+      setConfirmingId(null)
+    }
   }
 
   // ── 소모내역 열람 필터 ──
@@ -250,13 +277,15 @@ export default function InventoryPage() {
         roleLabel={userRole === 'final_manager' ? '최종관리자' : '재고관리자'}
       />
 
-      {/* ─── 재고 현황 탭 ─── */}
+      {/* ─── 재고 현황 탭 (A: 전체 재고현황 / B: 월별 소모내역 현황) ─── */}
       {activeTab === 'stock' && (
         <div className="max-w-6xl mx-auto px-4 py-6">
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+
+            {/* ── 섹션 A: 전체 재고현황 ── */}
             <div className="p-6 pb-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-gray-800">재고 현황</h2>
+                <h2 className="text-lg font-bold text-gray-800">전체 재고현황</h2>
                 <button onClick={fetchInventory} className="px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
               </div>
 
@@ -295,7 +324,7 @@ export default function InventoryPage() {
                   </thead>
                   <tbody>
                     {inventoryItems.map((item, i) => {
-                      const stockColor = item.stock <= 0 ? 'text-red-600' : item.stock <= 3 ? 'text-orange-600' : 'text-gray-800'
+                      const stockColor = item.stock <= 0 ? 'text-red-600' : item.stock <= 3 ? 'text-orange-600' : 'text-green-600'
                       return (
                         <tr key={`${item.item_name}-${item.spec}-${i}`} className="border-b border-gray-100 hover:bg-gray-50">
                           <td className="px-4 py-3 font-medium">{item.item_name}</td>
@@ -310,6 +339,141 @@ export default function InventoryPage() {
                         </tr>
                       )
                     })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* ── 섹션 B: 월별 소모내역 현황 ── */}
+            <div className="border-t-4 border-gray-100 p-6 pb-4 mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-lg font-bold text-gray-800">월별 소모내역 현황</h2>
+                <button
+                  onClick={handleViewExcel}
+                  disabled={viewExcelLoading}
+                  style={{ backgroundColor: '#2E9E5B' }}
+                  className="px-3 py-1.5 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
+                >
+                  {viewExcelLoading ? '생성 중...' : '엑셀 다운로드'}
+                </button>
+              </div>
+              {userRole === 'inventory_manager' && (
+                <p className="text-xs text-amber-600 mb-3">내용 수정이 필요하면 최종관리자에게 문의하세요. 대기 건은 &lsquo;확인 처리&rsquo; 시 소모량에 반영됩니다.</p>
+              )}
+
+              <div className="flex gap-2 flex-wrap items-center">
+                <select
+                  value={viewYearFilter}
+                  onChange={e => setViewYearFilter(e.target.value)}
+                  className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {viewAvailableYears.map(yy => (
+                    <option key={yy} value={yy}>{`20${yy}`}년</option>
+                  ))}
+                </select>
+                <select
+                  value={viewMonthFilter}
+                  onChange={e => setViewMonthFilter(e.target.value)}
+                  className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                    <option key={m} value={String(m)}>{m}월</option>
+                  ))}
+                </select>
+
+                <div className="w-px h-5 bg-gray-300" />
+
+                {(['all', 'pending', 'confirmed'] as const).map(st => (
+                  <button
+                    key={st}
+                    onClick={() => setViewStatusFilter(st)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                      viewStatusFilter === st ? 'bg-[#0A67A6] text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'
+                    }`}
+                  >
+                    {st === 'all' ? '전체' : CONSUMPTION_STATUS_LABEL[st]}
+                  </button>
+                ))}
+
+                <button onClick={fetchViewRecords} className="ml-auto px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
+              </div>
+            </div>
+
+            {viewLoading ? (
+              <div className="py-16 text-center text-gray-400">불러오는 중...</div>
+            ) : viewFiltered.length === 0 ? (
+              <div className="py-16 text-center text-gray-400">소모내역이 없습니다.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-t border-b border-gray-200">
+                    <tr>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold whitespace-nowrap">등록일</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">이름</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">물품명</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">규격</th>
+                      <th className="px-3 py-3 text-right text-gray-600 font-semibold">수량</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold whitespace-nowrap">사용일</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">사용처</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">메모</th>
+                      <th className="px-3 py-3 text-left text-gray-600 font-semibold" style={{ minWidth: '84px' }}>상태</th>
+                      <th className="px-3 py-3" style={{ minWidth: '84px' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewFiltered.map(rec => (
+                      <Fragment key={rec.id}>
+                        <tr
+                          className={`border-b border-gray-100 hover:bg-gray-50 transition ${
+                            userRole === 'final_manager' ? 'cursor-pointer' : ''
+                          } ${expandedViewId === rec.id ? 'bg-blue-50' : ''}`}
+                          onClick={() => {
+                            if (userRole === 'final_manager') {
+                              setExpandedViewId(expandedViewId === rec.id ? null : rec.id)
+                            }
+                          }}
+                        >
+                          <td className="px-3 py-3 text-xs text-gray-500 whitespace-nowrap">{rec.created_at.slice(0, 10)}</td>
+                          <td className="px-3 py-3 text-gray-600">{rec.input_by}</td>
+                          <td className="px-3 py-3 font-medium">{rec.item_name}</td>
+                          <td className="px-3 py-3 text-gray-500 text-xs">{rec.spec || '-'}</td>
+                          <td className="px-3 py-3 text-right text-gray-700 text-xs tabular-nums">{rec.quantity}</td>
+                          <td className="px-3 py-3 text-xs whitespace-nowrap">{rec.used_date}</td>
+                          <td className="px-3 py-3 text-gray-600 text-xs">{rec.used_location || '-'}</td>
+                          <td className="px-3 py-3 text-gray-600 text-xs">{rec.note || '-'}</td>
+                          <td className="px-3 py-3" style={{ minWidth: '84px' }}>
+                            <span className={`rounded-full text-xs font-semibold ${CONSUMPTION_STATUS_COLOR[rec.status]}`}
+                              style={{ padding: '3px 8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
+                              {CONSUMPTION_STATUS_LABEL[rec.status]}
+                            </span>
+                          </td>
+                          <td className="px-3 py-3" style={{ minWidth: '84px' }}>
+                            {rec.status === 'pending' && (
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); handleQuickConfirm(rec) }}
+                                disabled={confirmingId === rec.id}
+                                className="px-2.5 py-1 bg-[#0A67A6] text-white rounded-lg text-xs font-semibold hover:brightness-95 transition disabled:opacity-60 whitespace-nowrap"
+                              >
+                                {confirmingId === rec.id ? '처리 중...' : '확인 처리'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                        {userRole === 'final_manager' && expandedViewId === rec.id && (
+                          <tr>
+                            <td colSpan={10} className="p-0">
+                              <ConsumptionDetailPanel
+                                record={rec}
+                                onUpdate={handleViewUpdate}
+                                onFieldSave={handleViewFieldSave}
+                                onDelete={handleViewDelete}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -439,142 +603,11 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* ─── 소모내역 열람 탭 ─── */}
-      {activeTab === 'view' && (
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="p-6 pb-4">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-lg font-bold text-gray-800">소모내역 열람</h2>
-                <button
-                  onClick={handleViewExcel}
-                  disabled={viewExcelLoading}
-                  style={{ backgroundColor: '#2E9E5B' }}
-                  className="px-3 py-1.5 text-white rounded-lg text-sm font-semibold hover:brightness-90 transition disabled:opacity-60"
-                >
-                  {viewExcelLoading ? '생성 중...' : '📥 소모내역 엑셀 다운로드'}
-                </button>
-              </div>
-              {userRole === 'inventory_manager' && (
-                <p className="text-xs text-amber-600 mb-4">수정이 필요하면 최종관리자에게 문의하세요.</p>
-              )}
-
-              {/* 필터 바 */}
-              <div className="flex gap-2 flex-wrap items-center">
-                <select
-                  value={viewYearFilter}
-                  onChange={e => setViewYearFilter(e.target.value)}
-                  className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {viewAvailableYears.map(yy => (
-                    <option key={yy} value={yy}>{`20${yy}`}년</option>
-                  ))}
-                </select>
-                <select
-                  value={viewMonthFilter}
-                  onChange={e => setViewMonthFilter(e.target.value)}
-                  className="px-2 py-1.5 text-sm border rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">전체 월</option>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                    <option key={m} value={String(m)}>{m}월</option>
-                  ))}
-                </select>
-
-                <div className="w-px h-5 bg-gray-300" />
-
-                {(['all', 'pending', 'confirmed'] as const).map(s => (
-                  <button
-                    key={s}
-                    onClick={() => setViewStatusFilter(s)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                      viewStatusFilter === s ? 'bg-[#0A67A6] text-white' : 'bg-white text-gray-600 border hover:bg-gray-50'
-                    }`}
-                  >
-                    {s === 'all' ? '전체' : CONSUMPTION_STATUS_LABEL[s]}
-                  </button>
-                ))}
-
-                <button onClick={fetchViewRecords} className="ml-auto px-3 py-1.5 text-sm bg-white border rounded-lg hover:bg-gray-50">🔄 새로고침</button>
-              </div>
-            </div>
-
-            {viewLoading ? (
-              <div className="py-16 text-center text-gray-400">불러오는 중...</div>
-            ) : viewFiltered.length === 0 ? (
-              <div className="py-16 text-center text-gray-400">소모내역이 없습니다.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-t border-b border-gray-200">
-                    <tr>
-                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">이름</th>
-                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">물품명</th>
-                      <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden sm:table-cell">규격</th>
-                      <th className="px-3 py-3 text-right text-gray-600 font-semibold">수량</th>
-                      <th className="px-3 py-3 text-left text-gray-600 font-semibold">사용일</th>
-                      <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden md:table-cell">사용처</th>
-                      <th className="px-3 py-3 text-left text-gray-600 font-semibold" style={{ minWidth: '84px' }}>상태</th>
-                      <th className="px-3 py-3 text-left text-gray-600 font-semibold hidden lg:table-cell">등록일</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {viewFiltered.map(rec => (
-                      <>
-                        <tr
-                          key={rec.id}
-                          className={`border-b border-gray-100 hover:bg-gray-50 transition ${
-                            userRole === 'final_manager' ? 'cursor-pointer' : ''
-                          } ${expandedViewId === rec.id ? 'bg-blue-50' : ''}`}
-                          onClick={() => {
-                            if (userRole === 'final_manager') {
-                              setExpandedViewId(expandedViewId === rec.id ? null : rec.id)
-                            }
-                          }}
-                        >
-                          <td className="px-3 py-3 text-gray-600">{rec.input_by}</td>
-                          <td className="px-3 py-3">
-                            <span className="font-medium">{rec.item_name}</span>
-                          </td>
-                          <td className="px-3 py-3 hidden sm:table-cell text-gray-500 text-xs">{rec.spec || '-'}</td>
-                          <td className="px-3 py-3 text-right text-gray-700 text-xs tabular-nums">{rec.quantity}</td>
-                          <td className="px-3 py-3 text-xs">{rec.used_date}</td>
-                          <td className="px-3 py-3 hidden md:table-cell text-gray-600 text-xs">{rec.used_location || '-'}</td>
-                          <td className="px-3 py-3" style={{ minWidth: '84px' }}>
-                            <span className={`rounded-full text-xs font-semibold ${CONSUMPTION_STATUS_COLOR[rec.status]}`}
-                              style={{ padding: '3px 8px', whiteSpace: 'nowrap', display: 'inline-block' }}>
-                              {CONSUMPTION_STATUS_LABEL[rec.status]}
-                            </span>
-                          </td>
-                          <td className="px-3 py-3 hidden lg:table-cell text-gray-500 text-xs">{rec.created_at.slice(0, 10)}</td>
-                        </tr>
-                        {userRole === 'final_manager' && expandedViewId === rec.id && (
-                          <tr key={`${rec.id}-detail`}>
-                            <td colSpan={8} className="p-0">
-                              <ConsumptionDetailPanel
-                                record={rec}
-                                onUpdate={handleViewUpdate}
-                                onFieldSave={handleViewFieldSave}
-                                onDelete={handleViewDelete}
-                              />
-                            </td>
-                          </tr>
-                        )}
-                      </>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* 토스트 */}
       {toastVisible && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
           <div className="bg-gray-800 text-white text-sm font-medium px-5 py-3 rounded-full shadow-lg">
-            등록되었습니다
+            {toastMsg}
           </div>
         </div>
       )}

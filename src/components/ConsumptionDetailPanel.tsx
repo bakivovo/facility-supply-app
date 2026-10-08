@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { ConsumptionRecord } from '@/types'
-import { createClient } from '@/lib/supabase/client'
+import { confirmConsumptionRecord } from '@/lib/confirmConsumption'
 
 interface Props {
   record: ConsumptionRecord
@@ -97,43 +97,10 @@ export default function ConsumptionDetailPanel({ record, onUpdate, onFieldSave, 
   const handleConfirm = async () => {
     setConfirming(true)
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      const confirmedBy = user?.email || '관리자'
-      const confirmedAt = new Date().toISOString()
-
-      const res = await fetch('/api/consumption', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ids: [record.id],
-          status: 'confirmed',
-          confirmed_by: confirmedBy,
-          confirmed_at: confirmedAt,
-        }),
-      })
-      const { ok, data } = await safeJson(res)
-      if (!ok) throw new Error(data.error || '확인 처리 실패')
-      const updated = data.data[0]
+      const { record: updated, sheetResult: pendingSheet } = await confirmConsumptionRecord(record.id)
       onUpdate(updated)
-
-      // 시트 반영 웹훅 — 정산완료(RequestDetailPanel)와 동일하게 클라이언트에서 프록시 직접 호출
       setSheetResult(null)
-      const webhookPayload = {
-        type: 'consumption',
-        item_name: updated.item_name,
-        spec: updated.spec || '',
-        quantity: updated.quantity,
-        used_date: updated.used_date,
-        used_location: updated.used_location || '',
-        input_by: updated.input_by || '',
-        confirmed_at: updated.confirmed_at || confirmedAt,
-        note: updated.note || '',
-      }
-      fetch('/api/admin/sheet-webhook', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(webhookPayload),
-      }).then(r => r.json()).then(d => setSheetResult(d.matched ? 'matched' : 'unmatched')).catch(() => setSheetResult('unmatched'))
+      pendingSheet.then(setSheetResult)
     } catch (err: any) {
       alert('오류: ' + err.message)
     } finally {

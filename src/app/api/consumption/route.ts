@@ -11,6 +11,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '필수 항목을 입력해주세요.' }, { status: 400 })
     }
 
+    // 재고관리 대상(정산완료 + is_inventory_item) 물품만 소모내역 등록 가능
+    const { count, error: invError } = await supabase
+      .from('requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'settled')
+      .eq('is_inventory_item', true)
+      .eq('item_name', item_name)
+    if (invError) throw invError
+    if (!count) {
+      return NextResponse.json({ error: '재고관리 대상 물품만 입력 가능합니다.' }, { status: 400 })
+    }
+
     const { data, error } = await supabase
       .from('consumption_records')
       .insert({
